@@ -23,7 +23,8 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.jeithx.replogger"
     },
     "web": {
       "bundler": "metro",
@@ -33,6 +34,12 @@
       "expo-router",
       "expo-sqlite",
       "expo-sharing"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d0b135c5-f4dd-44de-9b0f-aa594e2ad569"
+      }
+    }
   }
 }
