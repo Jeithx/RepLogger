@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import Reanimated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoutineStore } from '../../store/useRoutineStore';
@@ -61,6 +62,7 @@ function RoutineCard({ routine, isActive, onDelete }: RoutineCardProps) {
 
 export default function RoutinesScreen() {
   const { routines, activeRoutineId, deleteRoutine, loadRoutines } = useRoutineStore();
+  const reducedMotion = useReducedMotion();
 
   useFocusEffect(
     useCallback(() => {
@@ -91,12 +93,16 @@ export default function RoutinesScreen() {
         data={routines}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <RoutineCard
-            routine={item}
-            isActive={item.id === activeRoutineId}
-            onDelete={() => handleDelete(item.id)}
-          />
+        renderItem={({ item, index }) => (
+          <Reanimated.View
+            entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 5) * 60).duration(300)}
+          >
+            <RoutineCard
+              routine={item}
+              isActive={item.id === activeRoutineId}
+              onDelete={() => handleDelete(item.id)}
+            />
+          </Reanimated.View>
         )}
         ListEmptyComponent={
           <View style={styles.empty}>

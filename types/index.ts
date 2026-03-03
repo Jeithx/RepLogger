@@ -216,3 +216,21 @@ export interface StatsOverviewData {
   streakWeeks: number;
   totalWorkouts: number;
 }
+
+// ─── Body weight types ─────────────────────────────────────────────────────
+
+export interface BodyWeightStats {
+  current: number | null;
+  sevenDayAvg: number | null;
+  thirtyDayAvg: number | null;
+  allTimeMin: { weight: number; date: string } | null;
+  allTimeMax: { weight: number; date: string } | null;
+  totalEntries: number;
+  firstEntryDate: string | null;
+}
+
+export interface PhaseInfo {
+  phase: WorkoutPhase | '';
+  startDate: string;
+  goalWeight: number | null;
+}

@@ -8,7 +8,8 @@ import {
   checkAndSavePR,
 } from '../db/workoutQueries';
 import { getRoutineDayExercisesWithNames } from '../db/routineQueries';
-import { setSetting } from '../db/settingsQueries';
+import { setSetting, getSetting } from '../db/settingsQueries';
+import { displayToKg, kgToDisplay } from '../utils/weightUtils';
 import { useHistoryStore } from './useHistoryStore';
 
 interface SummaryData {
@@ -33,6 +34,7 @@ interface WorkoutStore {
   toggleSetComplete: (exerciseId: number, setNumber: number) => void;
   addSet: (exerciseId: number) => void;
   removeSet: (exerciseId: number, setNumber: number) => void;
+  reorderExercises: (exercises: ActiveExercise[]) => void;
   finishWorkout: () => Promise<void>;
   discardWorkout: () => void;
   clearSummary: () => void;
@@ -51,6 +53,9 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
         set((state) => ({ elapsedSeconds: state.elapsedSeconds + 1 }));
       }, 1000);
 
+      const savedUnit = getSetting('weight_unit');
+      const unit = savedUnit === 'lbs' ? 'lbs' : 'kg';
+
       let exercises: ActiveExercise[] = [];
       if (routineDayId) {
         const routineExercises = getRoutineDayExercisesWithNames(routineDayId);
@@ -59,7 +64,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
           exerciseName: re.exercise_name,
           sets: Array.from({ length: re.target_sets }, (_, i) => ({
             setNumber: i + 1,
-            weight: re.target_weight > 0 ? String(re.target_weight) : '',
+            weight: re.target_weight > 0 ? String(kgToDisplay(re.target_weight, unit)) : '',
             reps: re.target_reps > 0 ? String(re.target_reps) : '',
             completed: false,
           })),
@@ -194,6 +199,12 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
     });
   },
 
+  reorderExercises: (exercises: ActiveExercise[]) => {
+    set((state) => ({
+      activeWorkout: state.activeWorkout ? { ...state.activeWorkout, exercises } : null,
+    }));
+  },
+
   finishWorkout: async () => {
     const { activeWorkout, elapsedSeconds, timerInterval } = get();
     if (!activeWorkout) return;
@@ -203,6 +214,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
     try {
       finishWorkoutDB(activeWorkout.id, new Date().toISOString());
 
+      const finishUnit = getSetting('weight_unit') === 'lbs' ? 'lbs' : 'kg';
       const newPRs: PRResult[] = [];
       let totalSets = 0;
       let totalVolumeKg = 0;
@@ -210,7 +222,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       for (const exercise of activeWorkout.exercises) {
         for (const s of exercise.sets) {
           if (!s.completed) continue;
-          const weightKg = parseFloat(s.weight) || 0;
+          const weightKg = displayToKg(parseFloat(s.weight) || 0, finishUnit);
           const reps = parseInt(s.reps, 10) || 0;
           if (reps === 0) continue;
 

@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
+import Reanimated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { SkeletonCard } from '../../components/SkeletonLoader';
 import {
   Alert,
   Animated,
@@ -16,6 +18,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useHistoryStore } from '../../store/useHistoryStore';
 import { getBestSetPerSession, getExerciseHistory, getPRForExercise } from '../../db/historyQueries';
+import { getSetting } from '../../db/settingsQueries';
+import { kgToDisplay, formatVolume as fmtVol, WeightUnit } from '../../utils/weightUtils';
 import ExercisePicker from '../../components/ExercisePicker';
 import StatsOverview from '../../components/StatsOverview';
 import WeeklyVolumeChart from '../../components/WeeklyVolumeChart';
@@ -43,11 +47,6 @@ function formatDuration(seconds: number): string {
   return '<1m';
 }
 
-function formatVolume(vol: number): string {
-  if (vol >= 1000) return `${(vol / 1000).toFixed(1)}k kg`;
-  return `${Math.round(vol)} kg`;
-}
-
 function formatDateShort(dateStr: string): string {
   const d = new Date(dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z');
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -59,11 +58,12 @@ const DELETE_WIDTH = 72;
 
 interface SwipeableWorkoutCardProps {
   workout: WorkoutSummary;
+  unit: WeightUnit;
   onPress: () => void;
   onDelete: () => void;
 }
 
-function SwipeableWorkoutCard({ workout, onPress, onDelete }: SwipeableWorkoutCardProps) {
+function SwipeableWorkoutCard({ workout, unit, onPress, onDelete }: SwipeableWorkoutCardProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const isOpen = useRef(false);
 
@@ -134,7 +134,7 @@ function SwipeableWorkoutCard({ workout, onPress, onDelete }: SwipeableWorkoutCa
           <View style={styles.cardMeta}>
             <Text style={styles.cardMetaText}>{formatDuration(workout.durationSeconds)}</Text>
             <Text style={styles.cardMetaDot}>·</Text>
-            <Text style={styles.cardMetaText}>{formatVolume(workout.totalVolume)}</Text>
+            <Text style={styles.cardMetaText}>{fmtVol(workout.totalVolume, unit)}</Text>
           </View>
           {preview.length > 0 && (
             <Text style={styles.cardExercises} numberOfLines={1}>
@@ -150,12 +150,12 @@ function SwipeableWorkoutCard({ workout, onPress, onDelete }: SwipeableWorkoutCa
 // ─── Progress Line Chart (SVG) ─────────────────────────────────────────────
 
 const CHART_H = 180;
-const PAD_LEFT = 44;
+const PAD_LEFT = 48;
 const PAD_BOTTOM = 28;
 const PAD_TOP = 10;
 const SCREEN_W = Dimensions.get('window').width;
 
-function ProgressChart({ data }: { data: BestSetPerSession[] }) {
+function ProgressChart({ data, unit }: { data: BestSetPerSession[]; unit: WeightUnit }) {
   if (data.length < 2) {
     return (
       <View style={styles.noData}>
@@ -167,7 +167,7 @@ function ProgressChart({ data }: { data: BestSetPerSession[] }) {
   const chartWidth = SCREEN_W - Spacing.lg * 4;
   const plotW = chartWidth - PAD_LEFT;
   const plotH = CHART_H - PAD_BOTTOM - PAD_TOP;
-  const values = data.map((d) => d.estimated1rm);
+  const values = data.map((d) => kgToDisplay(d.estimated1rm, unit));
   const minY = Math.min(...values);
   const maxY = Math.max(...values);
   const range = maxY - minY || 1;
@@ -175,8 +175,8 @@ function ProgressChart({ data }: { data: BestSetPerSession[] }) {
   const getX = (i: number) => PAD_LEFT + (i / (data.length - 1)) * plotW;
   const getY = (v: number) => PAD_TOP + (1 - (v - minY) / range) * plotH;
 
-  const pathD = data
-    .map((d, i) => `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getY(d.estimated1rm).toFixed(1)}`)
+  const pathD = values
+    .map((v, i) => `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getY(v).toFixed(1)}`)
     .join(' ');
 
   const yLabels = [0, 1, 2, 3].map((i) => {
@@ -200,8 +200,8 @@ function ProgressChart({ data }: { data: BestSetPerSession[] }) {
           </G>
         ))}
         <Path d={pathD} stroke={Colors.primary} strokeWidth={2} fill="none" strokeLinejoin="round" />
-        {data.map((d, i) => (
-          <Circle key={i} cx={getX(i)} cy={getY(d.estimated1rm)} r={4} fill={Colors.primary} />
+        {values.map((v, i) => (
+          <Circle key={i} cx={getX(i)} cy={getY(v)} r={4} fill={Colors.primary} />
         ))}
         {xIndices.map((i) => (
           <SvgText key={i} x={getX(i)} y={CHART_H - 6} fill={Colors.textTertiary} fontSize={9} textAnchor="middle">
@@ -215,12 +215,14 @@ function ProgressChart({ data }: { data: BestSetPerSession[] }) {
 
 // ─── Workouts Tab ──────────────────────────────────────────────────────────
 
-function WorkoutsTab() {
+function WorkoutsTab({ unit }: { unit: WeightUnit }) {
   const workouts = useHistoryStore((s) => s.workouts);
   const hasMore = useHistoryStore((s) => s.hasMore);
   const isLoadingMore = useHistoryStore((s) => s.isLoadingMore);
+  const hasLoadedOnce = useHistoryStore((s) => s.hasLoadedOnce);
   const loadMoreWorkouts = useHistoryStore((s) => s.loadMoreWorkouts);
   const deleteWorkout = useHistoryStore((s) => s.deleteWorkout);
+  const reducedMotion = useReducedMotion();
 
   return (
     <FlatList
@@ -236,17 +238,30 @@ function WorkoutsTab() {
         </>
       }
       ListEmptyComponent={
-        <View style={styles.emptyList}>
-          <Text style={styles.emptyListText}>No workouts yet</Text>
-          <Text style={styles.emptyListHint}>Finish a workout to see it here</Text>
-        </View>
+        hasLoadedOnce ? (
+          <View style={styles.emptyList}>
+            <Text style={styles.emptyListText}>No workouts yet</Text>
+            <Text style={styles.emptyListHint}>Finish a workout to see it here</Text>
+          </View>
+        ) : (
+          <View style={styles.skeletonContainer}>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
+        )
       }
-      renderItem={({ item }) => (
-        <SwipeableWorkoutCard
-          workout={item}
-          onPress={() => router.push(`/history/${item.id}`)}
-          onDelete={() => deleteWorkout(item.id)}
-        />
+      renderItem={({ item, index }) => (
+        <Reanimated.View
+          entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 5) * 60).duration(300)}
+        >
+          <SwipeableWorkoutCard
+            workout={item}
+            unit={unit}
+            onPress={() => router.push(`/history/${item.id}`)}
+            onDelete={() => deleteWorkout(item.id)}
+          />
+        </Reanimated.View>
       )}
       onEndReached={loadMoreWorkouts}
       onEndReachedThreshold={0.3}
@@ -268,7 +283,7 @@ function WorkoutsTab() {
 
 // ─── Progress Tab ──────────────────────────────────────────────────────────
 
-function ProgressTab() {
+function ProgressTab({ unit }: { unit: WeightUnit }) {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [selected, setSelected] = useState<{ id: number; name: string } | null>(null);
   const [chartData, setChartData] = useState<BestSetPerSession[]>([]);
@@ -299,8 +314,10 @@ function ProgressTab() {
       {selected && (
         <>
           <View style={styles.chartCard}>
-            <Text style={styles.chartTitle}>ESTIMATED 1RM PROGRESS</Text>
-            <ProgressChart data={chartData} />
+            <Text style={styles.chartTitle}>
+              ESTIMATED 1RM PROGRESS ({unit.toUpperCase()})
+            </Text>
+            <ProgressChart data={chartData} unit={unit} />
           </View>
 
           {pr && (
@@ -309,10 +326,12 @@ function ProgressTab() {
               <View style={styles.prCardInfo}>
                 <Text style={styles.prCardLabel}>Personal Record</Text>
                 <Text style={styles.prCardValue}>
-                  {pr.weight_kg}kg × {pr.reps} reps
+                  {kgToDisplay(pr.weight_kg, unit)}{unit} × {pr.reps} reps
                 </Text>
               </View>
-              <Text style={styles.prCardEst}>~{Math.round(pr.estimated_1rm)}kg 1RM</Text>
+              <Text style={styles.prCardEst}>
+                ~{kgToDisplay(pr.estimated_1rm, unit)} {unit} 1RM
+              </Text>
             </View>
           )}
 
@@ -329,9 +348,11 @@ function ProgressTab() {
                 <View key={si} style={styles.sessionSetRow}>
                   <Text style={styles.sessionSetNum}>Set {si + 1}</Text>
                   <Text style={styles.sessionSetDetail}>
-                    {s.weightKg}kg × {s.reps}
+                    {kgToDisplay(s.weightKg, unit)}{unit} × {s.reps}
                   </Text>
-                  <Text style={styles.sessionSetEst}>~{Math.round(s.estimated1rm)}kg</Text>
+                  <Text style={styles.sessionSetEst}>
+                    ~{kgToDisplay(s.estimated1rm, unit)} {unit}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -352,7 +373,7 @@ function ProgressTab() {
 
 // ─── Records Tab ───────────────────────────────────────────────────────────
 
-function RecordsTab() {
+function RecordsTab({ unit }: { unit: WeightUnit }) {
   const prs = useHistoryStore((s) => s.prs);
 
   if (prs.length === 0) {
@@ -393,9 +414,11 @@ function RecordsTab() {
                 </View>
                 <View style={styles.prRowRight}>
                   <Text style={[styles.prRowWeight, isRecent && styles.prRowWeightRecent]}>
-                    {pr.weight_kg}kg × {pr.reps}
+                    {kgToDisplay(pr.weight_kg, unit)}{unit} × {pr.reps}
                   </Text>
-                  <Text style={styles.prRowEst}>~{Math.round(pr.estimated_1rm)}kg 1RM</Text>
+                  <Text style={styles.prRowEst}>
+                    ~{kgToDisplay(pr.estimated_1rm, unit)} {unit} 1RM
+                  </Text>
                 </View>
                 {isRecent && (
                   <Ionicons name="trophy" size={14} color={Colors.primary} />
@@ -420,6 +443,7 @@ const TABS: { key: TabKey; label: string }[] = [
 
 export default function HistoryScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('workouts');
+  const [unit, setUnit] = useState<WeightUnit>('kg');
   const loadWorkouts = useHistoryStore((s) => s.loadWorkouts);
   const loadPRs = useHistoryStore((s) => s.loadPRs);
   const loadStats = useHistoryStore((s) => s.loadStats);
@@ -429,6 +453,8 @@ export default function HistoryScreen() {
       loadWorkouts();
       loadPRs();
       loadStats();
+      const saved = getSetting('weight_unit');
+      setUnit(saved === 'lbs' ? 'lbs' : 'kg');
     }, [loadWorkouts, loadPRs, loadStats])
   );
 
@@ -453,9 +479,9 @@ export default function HistoryScreen() {
       </View>
 
       <View style={styles.content}>
-        {activeTab === 'workouts' && <WorkoutsTab />}
-        {activeTab === 'progress' && <ProgressTab />}
-        {activeTab === 'records' && <RecordsTab />}
+        {activeTab === 'workouts' && <WorkoutsTab unit={unit} />}
+        {activeTab === 'progress' && <ProgressTab unit={unit} />}
+        {activeTab === 'records' && <RecordsTab unit={unit} />}
       </View>
     </View>
   );
@@ -554,6 +580,7 @@ const styles = StyleSheet.create({
   cardMetaText: { color: Colors.textSecondary, fontSize: Typography.size.sm },
   cardMetaDot: { color: Colors.textTertiary, fontSize: Typography.size.sm },
   cardExercises: { color: Colors.textTertiary, fontSize: Typography.size.xs },
+  skeletonContainer: { padding: Spacing.lg, gap: Spacing.sm },
   emptyList: { alignItems: 'center', paddingTop: Spacing.xxxl, gap: Spacing.sm },
   emptyListText: {
     color: Colors.textSecondary,

@@ -13,7 +13,8 @@
       "backgroundColor": "#0F0F0F"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "backgroundColor": "#0F0F0F"
     },
     "android": {
       "adaptiveIcon": {
@@ -30,7 +31,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-sharing"
     ]
   }
 }

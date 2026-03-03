@@ -1,29 +1,32 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   FlatList,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import Svg, { Polyline } from 'react-native-svg';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useRoutineStore } from '../../store/useRoutineStore';
+import { useBodyWeightStore } from '../../store/useBodyWeightStore';
 import { getRecentWorkouts } from '../../db/workoutQueries';
 import { getWeekStats } from '../../db/historyQueries';
-import { addBodyWeightEntry, getLatestBodyWeightEntry } from '../../db/bodyWeightQueries';
-import { Workout, RoutineDayWithExercises } from '../../types';
+import { getSetting } from '../../db/settingsQueries';
+import { kgToDisplay, formatVolume, WeightUnit } from '../../utils/weightUtils';
+import { BodyWeightEntry, Workout, RoutineDayWithExercises } from '../../types';
 import { BorderRadius, Colors, Spacing, Typography } from '../../constants/theme';
 
-function formatVolumeStat(vol: number): string {
-  if (vol >= 1000) return `${(vol / 1000).toFixed(1)}k`;
-  return String(Math.round(vol));
-}
+const PHASE_COLOR: Record<string, string> = {
+  cut: Colors.error,
+  bulk: Colors.success,
+  maintain: '#4488FF',
+};
 
 function formatDate(isoString: string): string {
   const d = new Date(isoString);
@@ -42,6 +45,52 @@ function formatElapsed(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ─── Sparkline ─────────────────────────────────────────────────────────────
+
+interface SparklineProps {
+  entries: BodyWeightEntry[];
+  unit: WeightUnit;
+}
+
+function Sparkline({ entries, unit }: SparklineProps) {
+  const [width, setWidth] = useState(0);
+  const H = 40;
+  const PAD = 4;
+
+  const display = entries.map((e) => kgToDisplay(e.weight_kg, unit));
+  const min = Math.min(...display);
+  const max = Math.max(...display);
+  const range = max - min || 1;
+
+  const points =
+    width > 0 && display.length >= 2
+      ? display
+          .map((w, i) => {
+            const x = PAD + (i / (display.length - 1)) * (width - PAD * 2);
+            const y = H - PAD - ((w - min) / range) * (H - PAD * 2);
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+          })
+          .join(' ')
+      : '';
+
+  return (
+    <View style={{ height: H }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      {points !== '' && (
+        <Svg width={width} height={H}>
+          <Polyline
+            points={points}
+            fill="none"
+            stroke={Colors.primary}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </Svg>
+      )}
+    </View>
+  );
 }
 
 // ─── Swap Day Modal ────────────────────────────────────────────────────────
@@ -67,6 +116,7 @@ function SwapDayModal({ visible, days, onSelect, onClose }: SwapDayModalProps) {
             <Pressable
               style={({ pressed }) => [styles.swapRow, pressed && styles.swapRowPressed]}
               onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 onSelect(item);
                 onClose();
               }}
@@ -157,7 +207,10 @@ function TodaysCard({ onStartWithDay, onStartBlank }: TodaysCardProps) {
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.secondaryBtn, pressed && styles.secondaryBtnPressed]}
-          onPress={skipDay}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            skipDay();
+          }}
         >
           <Text style={styles.secondaryBtnText}>Skip</Text>
         </Pressable>
@@ -177,23 +230,38 @@ function TodaysCard({ onStartWithDay, onStartBlank }: TodaysCardProps) {
 
 export default function HomeScreen() {
   const { activeWorkout, elapsedSeconds, startWorkout } = useWorkoutStore();
+  const {
+    entries: bwEntries,
+    stats: bwStats,
+    phaseInfo,
+    loadEntries: loadBwEntries,
+    loadStats: loadBwStats,
+    loadPhaseInfo,
+  } = useBodyWeightStore();
   const [lastWorkout, setLastWorkout] = useState<Workout | null>(null);
-  const [bodyWeightInput, setBodyWeightInput] = useState('');
-  const [latestWeight, setLatestWeight] = useState<number | null>(null);
-  const [wSaved, setWSaved] = useState(false);
+  const [unit, setUnit] = useState<WeightUnit>('kg');
   const [weekStats, setWeekStats] = useState<{ count: number; volume: number }>({ count: 0, volume: 0 });
 
   const refresh = useCallback(() => {
     const recents = getRecentWorkouts(1);
     setLastWorkout(recents[0] ?? null);
-    const latest = getLatestBodyWeightEntry();
-    setLatestWeight(latest?.weight_kg ?? null);
     setWeekStats(getWeekStats());
-  }, []);
+    const savedUnit = getSetting('weight_unit');
+    setUnit(savedUnit === 'lbs' ? 'lbs' : 'kg');
+    loadBwEntries();
+    loadBwStats();
+    loadPhaseInfo();
+  }, [loadBwEntries, loadBwStats, loadPhaseInfo]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   useEffect(() => {
     refresh();
-  }, [refresh, activeWorkout]);
+  }, [activeWorkout, refresh]);
 
   const handleStartWithDay = useCallback(
     (routineDayId: number) => {
@@ -216,18 +284,10 @@ export default function HomeScreen() {
     router.push('/workout/active');
   }, [activeWorkout, startWorkout]);
 
-  const handleSaveWeight = useCallback(() => {
-    const val = parseFloat(bodyWeightInput.replace(',', '.'));
-    if (isNaN(val) || val <= 0) {
-      Alert.alert('Invalid weight', 'Enter a valid weight in kg.');
-      return;
-    }
-    addBodyWeightEntry(val);
-    setLatestWeight(val);
-    setBodyWeightInput('');
-    setWSaved(true);
-    setTimeout(() => setWSaved(false), 2000);
-  }, [bodyWeightInput]);
+  const todayWeight =
+    bwStats?.current != null ? kgToDisplay(bwStats.current, unit) : null;
+  const sparkEntries = [...bwEntries.slice(0, 7)].reverse();
+  const phaseColor = phaseInfo?.phase ? PHASE_COLOR[phaseInfo.phase] : null;
 
   return (
     <ScrollView
@@ -262,41 +322,39 @@ export default function HomeScreen() {
           onPress={() => router.push('/(tabs)/history')}
         >
           <Text style={styles.statsStripText}>
-            This week: {weekStats.count} workout{weekStats.count !== 1 ? 's' : ''} · {formatVolumeStat(weekStats.volume)} kg
+            This week: {weekStats.count} workout{weekStats.count !== 1 ? 's' : ''} ·{' '}
+            {formatVolume(weekStats.volume, unit)}
           </Text>
           <Ionicons name="chevron-forward" size={14} color={Colors.textTertiary} />
         </Pressable>
       )}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Body Weight</Text>
-        {latestWeight !== null && (
-          <Text style={styles.lastWeight}>Last recorded: {latestWeight} kg</Text>
-        )}
-        <View style={styles.weightRow}>
-          <TextInput
-            style={styles.weightInput}
-            value={bodyWeightInput}
-            onChangeText={setBodyWeightInput}
-            placeholder="e.g. 80.5"
-            placeholderTextColor={Colors.textTertiary}
-            keyboardType="decimal-pad"
-            returnKeyType="done"
-            onSubmitEditing={handleSaveWeight}
-          />
-          <Text style={styles.kgLabel}>kg</Text>
-          <Pressable
-            style={({ pressed }) => [styles.saveWeightBtn, pressed && styles.saveWeightBtnPressed]}
-            onPress={handleSaveWeight}
-          >
-            {wSaved ? (
-              <Ionicons name="checkmark" size={18} color={Colors.success} />
-            ) : (
-              <Text style={styles.saveWeightText}>Save</Text>
-            )}
-          </Pressable>
+      <Pressable
+        style={({ pressed }) => [styles.bwCard, pressed && styles.cardPressed]}
+        onPress={() => router.push('/bodyweight')}
+      >
+        <View style={styles.bwHeader}>
+          <Text style={styles.sectionTitle}>Body Weight</Text>
+          {phaseColor && phaseInfo?.phase ? (
+            <View style={[styles.phaseBadge, { borderColor: phaseColor }]}>
+              <Text style={[styles.phaseBadgeText, { color: phaseColor }]}>
+                {phaseInfo.phase.toUpperCase()}
+              </Text>
+            </View>
+          ) : null}
         </View>
-      </View>
+
+        <Text style={styles.bwValue}>
+          {todayWeight !== null ? `${todayWeight} ${unit}` : '—'}
+        </Text>
+
+        {sparkEntries.length >= 2 && <Sparkline entries={sparkEntries} unit={unit} />}
+
+        <View style={styles.bwFooter}>
+          <Text style={styles.bwLogLink}>+ Log Weight</Text>
+          <Ionicons name="chevron-forward" size={14} color={Colors.textTertiary} />
+        </View>
+      </Pressable>
 
       {lastWorkout && (
         <View style={styles.section}>
@@ -455,36 +513,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
-  lastWeight: { color: Colors.textTertiary, fontSize: Typography.size.sm },
-  weightRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  weightInput: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    color: Colors.text,
-    fontSize: Typography.size.md,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  kgLabel: { color: Colors.textSecondary, fontSize: Typography.size.md },
-  saveWeightBtn: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minWidth: 64,
-    alignItems: 'center',
-  },
-  saveWeightBtnPressed: { backgroundColor: Colors.surface },
-  saveWeightText: {
-    color: Colors.text,
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.semibold,
-  },
   lastWorkoutCard: {
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
@@ -547,5 +575,45 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textSecondary,
     fontSize: Typography.size.sm,
+  },
+  bwCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: Spacing.sm,
+  },
+  bwHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bwValue: {
+    color: Colors.text,
+    fontSize: Typography.size.xxxl,
+    fontWeight: Typography.weight.bold,
+  },
+  phaseBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  phaseBadgeText: {
+    fontSize: Typography.size.xs,
+    fontWeight: Typography.weight.bold,
+    letterSpacing: 0.5,
+  },
+  bwFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.xs,
+  },
+  bwLogLink: {
+    flex: 1,
+    color: Colors.primary,
+    fontSize: Typography.size.sm,
+    fontWeight: Typography.weight.semibold,
   },
 });

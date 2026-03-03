@@ -11,7 +11,10 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(npm install expo-haptics)",
       "Bash(npm install expo-haptics --legacy-peer-deps)",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npx expo install expo-blur expo-sharing react-native-draggable-flatlist --legacy-peer-deps)",
+      "Bash(npx expo install expo-blur expo-sharing react-native-draggable-flatlist -- --legacy-peer-deps)",
+      "Bash(npx expo install expo-file-system react-native-gesture-handler -- --legacy-peer-deps)"
     ]
   }
 }

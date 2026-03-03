@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
+  Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -10,8 +9,24 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import DraggableFlatList, {
+  ScaleDecorator,
+  RenderItemParams,
+} from 'react-native-draggable-flatlist';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withSpring,
+  withTiming,
+  useReducedMotion,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { getLastPerformance } from '../../db/workoutQueries';
+import { getSetting } from '../../db/settingsQueries';
+import { getDatabase } from '../../db/database';
+import { kgToDisplay, WeightUnit } from '../../utils/weightUtils';
 import ExercisePicker from '../../components/ExercisePicker';
 import RestTimer from '../../components/RestTimer';
 import { ActiveExercise, ActiveSet, LastPerformanceSet } from '../../types';
@@ -30,15 +45,62 @@ function formatElapsed(seconds: number): string {
 interface SetRowProps {
   exerciseId: number;
   set: ActiveSet;
+  unit: WeightUnit;
+  weightPlaceholder: string;
   onToggle: () => void;
   onDelete: () => void;
 }
 
-function SetRow({ exerciseId, set, onToggle, onDelete }: SetRowProps) {
+const SetRow = memo(function SetRow({
+  exerciseId,
+  set,
+  unit,
+  weightPlaceholder,
+  onToggle,
+  onDelete,
+}: SetRowProps) {
   const updateSet = useWorkoutStore((s) => s.updateSet);
+  const reduceMotion = useReducedMotion();
+
+  const scale = useSharedValue(1);
+  const flashOpacity = useSharedValue(0);
+  const checkScale = useSharedValue(set.completed ? 1 : 0);
+  const prevCompleted = useRef(set.completed);
+
+  useEffect(() => {
+    if (!prevCompleted.current && set.completed && !reduceMotion) {
+      scale.value = withSequence(withSpring(0.97, { damping: 15 }), withSpring(1, { damping: 15 }));
+      flashOpacity.value = withSequence(
+        withTiming(1, { duration: 150 }),
+        withTiming(0, { duration: 300 })
+      );
+      checkScale.value = withSequence(withSpring(1.2, { damping: 10 }), withSpring(1, { damping: 12 }));
+    } else if (set.completed && prevCompleted.current !== set.completed) {
+      checkScale.value = 1;
+    } else if (!set.completed) {
+      checkScale.value = withSpring(0, { damping: 15 });
+    }
+    prevCompleted.current = set.completed;
+  }, [set.completed]);
+
+  const rowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  const flashStyle = useAnimatedStyle(() => ({
+    opacity: flashOpacity.value,
+  }));
+  const checkStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: checkScale.value }],
+  }));
 
   return (
-    <View style={[styles.setRow, set.completed && styles.setRowCompleted]}>
+    <Animated.View style={[styles.setRow, set.completed && styles.setRowCompleted, rowStyle]}>
+      {/* Flash overlay */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, styles.flashOverlay, flashStyle]}
+        pointerEvents="none"
+      />
+
       <Text style={styles.setNumber}>{set.setNumber}</Text>
 
       <TextInput
@@ -46,7 +108,7 @@ function SetRow({ exerciseId, set, onToggle, onDelete }: SetRowProps) {
         value={set.weight}
         onChangeText={(v) => updateSet(exerciseId, set.setNumber, 'weight', v)}
         keyboardType="decimal-pad"
-        placeholder="kg"
+        placeholder={weightPlaceholder}
         placeholderTextColor={Colors.textTertiary}
         editable={!set.completed}
         selectTextOnFocus
@@ -64,64 +126,96 @@ function SetRow({ exerciseId, set, onToggle, onDelete }: SetRowProps) {
       />
 
       <Pressable
-        style={[styles.checkButton, set.completed && styles.checkButtonDone]}
+        style={styles.checkButton}
         onPress={onToggle}
         hitSlop={8}
       >
-        <Ionicons
-          name={set.completed ? 'checkmark-circle' : 'checkmark-circle-outline'}
-          size={28}
-          color={set.completed ? Colors.primary : Colors.textTertiary}
-        />
+        <Animated.View style={checkStyle}>
+          <Ionicons
+            name={set.completed ? 'checkmark-circle' : 'checkmark-circle-outline'}
+            size={28}
+            color={set.completed ? Colors.primary : Colors.textTertiary}
+          />
+        </Animated.View>
       </Pressable>
 
       <Pressable onPress={onDelete} hitSlop={8} style={styles.deleteSetBtn}>
         <Ionicons name="close" size={16} color={Colors.textTertiary} />
       </Pressable>
-    </View>
+    </Animated.View>
   );
-}
+});
 
 // ─── Exercise Block ────────────────────────────────────────────────────────
 
 interface ExerciseBlockProps {
   exercise: ActiveExercise;
+  unit: WeightUnit;
+  drag: () => void;
+  isActive: boolean;
   onSetCompleted: () => void;
 }
 
-function ExerciseBlock({ exercise, onSetCompleted }: ExerciseBlockProps) {
+const ExerciseBlock = memo(function ExerciseBlock({
+  exercise,
+  unit,
+  drag,
+  isActive,
+  onSetCompleted,
+}: ExerciseBlockProps) {
   const { toggleSetComplete, addSet, removeSet, removeExercise } = useWorkoutStore();
   const [lastPerf, setLastPerf] = useState<LastPerformanceSet[]>([]);
+  const [muscleGroup, setMuscleGroup] = useState<string | null>(null);
 
   useEffect(() => {
-    const perf = getLastPerformance(exercise.exerciseId);
-    setLastPerf(perf);
+    setLastPerf(getLastPerformance(exercise.exerciseId));
+    const db = getDatabase();
+    const result = db.getFirstSync<{ muscle_group: string }>(
+      'SELECT muscle_group FROM exercises WHERE id = ?',
+      [exercise.exerciseId]
+    );
+    setMuscleGroup(result?.muscle_group ?? null);
   }, [exercise.exerciseId]);
 
   const handleToggle = useCallback(
     (setNumber: number, wasCompleted: boolean) => {
       toggleSetComplete(exercise.exerciseId, setNumber);
-      if (!wasCompleted) onSetCompleted();
+      if (!wasCompleted) {
+        onSetCompleted();
+        try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+      }
     },
     [exercise.exerciseId, toggleSetComplete, onSetCompleted]
   );
 
   const lastPerfText =
     lastPerf.length > 0
-      ? `Last: ${lastPerf.map((s) => `${s.weight_kg}kg×${s.reps}`).join(', ')}`
+      ? `Last: ${lastPerf.map((s) => `${kgToDisplay(s.weight_kg, unit)}${unit}×${s.reps}`).join(', ')}`
       : null;
 
   return (
-    <View style={styles.exerciseBlock}>
-      <View style={styles.exerciseHeader}>
-        <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
+    <View style={[styles.exerciseBlock, isActive && styles.exerciseBlockActive]}>
+      <Pressable
+        onLongPress={drag}
+        delayLongPress={200}
+        style={styles.exerciseHeader}
+      >
+        <Ionicons name="reorder-three-outline" size={20} color={Colors.textTertiary} style={styles.dragHandle} />
+        <View style={styles.exerciseNameRow}>
+          <Text style={styles.exerciseName} numberOfLines={1}>{exercise.exerciseName}</Text>
+          {muscleGroup && (
+            <View style={styles.muscleBadge}>
+              <Text style={styles.muscleBadgeText}>{muscleGroup}</Text>
+            </View>
+          )}
+        </View>
         <Pressable
           onPress={() => removeExercise(exercise.exerciseId)}
           hitSlop={8}
         >
           <Ionicons name="trash-outline" size={18} color={Colors.textTertiary} />
         </Pressable>
-      </View>
+      </Pressable>
 
       {lastPerfText && (
         <Text style={styles.lastPerf}>{lastPerfText}</Text>
@@ -129,24 +223,30 @@ function ExerciseBlock({ exercise, onSetCompleted }: ExerciseBlockProps) {
 
       <View style={styles.setHeader}>
         <Text style={styles.setHeaderText}>SET</Text>
-        <Text style={[styles.setHeaderText, styles.setHeaderCenter]}>KG</Text>
+        <Text style={[styles.setHeaderText, styles.setHeaderCenter]}>{unit.toUpperCase()}</Text>
         <Text style={[styles.setHeaderText, styles.setHeaderCenter]}>REPS</Text>
         <View style={{ width: 36 }} />
         <View style={{ width: 24 }} />
       </View>
 
-      {exercise.sets.map((s) => (
-        <SetRow
-          key={s.setNumber}
-          exerciseId={exercise.exerciseId}
-          set={s}
-          onToggle={() => handleToggle(s.setNumber, s.completed)}
-          onDelete={() => {
-            if (exercise.sets.length <= 1) return;
-            removeSet(exercise.exerciseId, s.setNumber);
-          }}
-        />
-      ))}
+      {exercise.sets.map((s) => {
+        const lp = lastPerf.find((l) => l.set_number === s.setNumber);
+        const weightPlaceholder = lp ? String(kgToDisplay(lp.weight_kg, unit)) : unit;
+        return (
+          <SetRow
+            key={s.setNumber}
+            exerciseId={exercise.exerciseId}
+            set={s}
+            unit={unit}
+            weightPlaceholder={weightPlaceholder}
+            onToggle={() => handleToggle(s.setNumber, s.completed)}
+            onDelete={() => {
+              if (exercise.sets.length <= 1) return;
+              removeSet(exercise.exerciseId, s.setNumber);
+            }}
+          />
+        );
+      })}
 
       <Pressable
         style={({ pressed }) => [styles.addSetBtn, pressed && styles.addSetBtnPressed]}
@@ -157,15 +257,65 @@ function ExerciseBlock({ exercise, onSetCompleted }: ExerciseBlockProps) {
       </Pressable>
     </View>
   );
+});
+
+// ─── Discard Sheet ─────────────────────────────────────────────────────────
+
+interface DiscardSheetProps {
+  visible: boolean;
+  completedSets: number;
+  onKeep: () => void;
+  onDiscard: () => void;
+}
+
+function DiscardSheet({ visible, completedSets, onKeep, onDiscard }: DiscardSheetProps) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onKeep}>
+      <Pressable style={styles.sheetBackdrop} onPress={onKeep} />
+      <View style={styles.sheet}>
+        <Text style={styles.sheetEmoji}>⚠️</Text>
+        <Text style={styles.sheetTitle}>Discard Workout?</Text>
+        <Text style={styles.sheetSub}>
+          {completedSets > 0
+            ? `${completedSets} completed set${completedSets !== 1 ? 's' : ''} will be lost.`
+            : 'All progress will be lost.'}
+        </Text>
+        <View style={styles.sheetButtons}>
+          <Pressable
+            style={({ pressed }) => [styles.keepBtn, pressed && { opacity: 0.85 }]}
+            onPress={onKeep}
+          >
+            <Text style={styles.keepBtnText}>Keep Going</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.discardBtn, pressed && { opacity: 0.85 }]}
+            onPress={onDiscard}
+          >
+            <Text style={styles.discardBtnText}>Discard</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 // ─── Active Workout Screen ─────────────────────────────────────────────────
 
 export default function ActiveWorkoutScreen() {
-  const { activeWorkout, elapsedSeconds, finishWorkout, discardWorkout, summaryData } =
+  const { activeWorkout, elapsedSeconds, finishWorkout, discardWorkout, summaryData, reorderExercises } =
     useWorkoutStore();
   const [pickerVisible, setPickerVisible] = useState(false);
   const [restTimerVisible, setRestTimerVisible] = useState(false);
+  const [discardVisible, setDiscardVisible] = useState(false);
+  const [unit, setUnit] = useState<WeightUnit>('kg');
+  const [restSeconds, setRestSeconds] = useState(90);
+
+  useEffect(() => {
+    const savedUnit = getSetting('weight_unit');
+    const savedRest = getSetting('rest_timer_seconds');
+    setUnit(savedUnit === 'lbs' ? 'lbs' : 'kg');
+    setRestSeconds(savedRest ? parseInt(savedRest, 10) : 90);
+  }, []);
 
   useEffect(() => {
     if (summaryData) {
@@ -180,75 +330,80 @@ export default function ActiveWorkoutScreen() {
   }, [activeWorkout]);
 
   const handleFinish = useCallback(() => {
-    Alert.alert('Finish Workout?', 'Completed sets will be saved.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Finish',
-        onPress: () => finishWorkout(),
-      },
-    ]);
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+    finishWorkout();
   }, [finishWorkout]);
 
   const handleDiscard = useCallback(() => {
-    Alert.alert('Discard Workout?', 'All progress will be lost.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: () => {
-          discardWorkout();
-          router.replace('/(tabs)/');
-        },
-      },
-    ]);
+    discardWorkout();
+    router.replace('/(tabs)/');
   }, [discardWorkout]);
 
+  const renderItem = useCallback(
+    ({ item, drag, isActive }: RenderItemParams<ActiveExercise>) => (
+      <ScaleDecorator>
+        <ExerciseBlock
+          exercise={item}
+          unit={unit}
+          drag={drag}
+          isActive={isActive}
+          onSetCompleted={() => setRestTimerVisible(true)}
+        />
+      </ScaleDecorator>
+    ),
+    [unit]
+  );
+
   if (!activeWorkout) return null;
+
+  const completedCount = activeWorkout.exercises
+    .flatMap((e) => e.sets)
+    .filter((s) => s.completed).length;
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={handleDiscard} style={styles.headerBtn}>
+        <Pressable onPress={() => setDiscardVisible(true)} style={styles.headerBtn}>
           <Text style={styles.discardText}>Discard</Text>
         </Pressable>
 
         <Text style={styles.elapsed}>{formatElapsed(elapsedSeconds)}</Text>
 
         <Pressable
-          style={({ pressed }) => [styles.finishBtn, pressed && styles.finishBtnPressed]}
-          onPress={handleFinish}
+          style={({ pressed }) => [
+            styles.finishBtn,
+            completedCount === 0 && styles.finishBtnDisabled,
+            pressed && completedCount > 0 && styles.finishBtnPressed,
+          ]}
+          onPress={completedCount > 0 ? handleFinish : undefined}
+          disabled={completedCount === 0}
         >
-          <Text style={styles.finishText}>Finish</Text>
+          <Text style={styles.finishText}>
+            {completedCount > 0 ? `Finish (${completedCount})` : 'Finish'}
+          </Text>
         </Pressable>
       </View>
 
       {/* Exercise list */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+      <DraggableFlatList
+        data={activeWorkout.exercises}
+        keyExtractor={(item) => String(item.exerciseId)}
+        renderItem={renderItem}
+        onDragEnd={({ data }) => reorderExercises(data)}
         keyboardShouldPersistTaps="handled"
-      >
-        {activeWorkout.exercises.length === 0 && (
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="barbell-outline" size={48} color={Colors.textTertiary} />
             <Text style={styles.emptyTitle}>No exercises yet</Text>
             <Text style={styles.emptySubtitle}>Tap "+ Add Exercise" to get started</Text>
           </View>
-        )}
+        }
+        ListFooterComponent={<View style={{ height: 100 }} />}
+      />
 
-        {activeWorkout.exercises.map((ex) => (
-          <ExerciseBlock
-            key={ex.exerciseId}
-            exercise={ex}
-            onSetCompleted={() => setRestTimerVisible(true)}
-          />
-        ))}
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
-
-      {/* Floating add exercise button */}
+      {/* FAB */}
       <View style={styles.fab}>
         <Pressable
           style={({ pressed }) => [styles.fabButton, pressed && styles.fabButtonPressed]}
@@ -269,8 +424,15 @@ export default function ActiveWorkoutScreen() {
 
       <RestTimer
         visible={restTimerVisible}
-        durationSeconds={90}
+        durationSeconds={restSeconds}
         onDismiss={() => setRestTimerVisible(false)}
+      />
+
+      <DiscardSheet
+        visible={discardVisible}
+        completedSets={completedCount}
+        onKeep={() => setDiscardVisible(false)}
+        onDiscard={handleDiscard}
       />
     </View>
   );
@@ -311,21 +473,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
     borderRadius: BorderRadius.md,
-    minWidth: 72,
+    minWidth: 88,
     alignItems: 'center',
+  },
+  finishBtnDisabled: {
+    backgroundColor: Colors.surfaceElevated,
   },
   finishBtnPressed: {
     opacity: 0.8,
   },
   finishText: {
     color: Colors.background,
-    fontSize: Typography.size.md,
+    fontSize: Typography.size.sm,
     fontWeight: Typography.weight.bold,
   },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
+  listContent: {
     paddingTop: Spacing.md,
   },
   emptyState: {
@@ -353,26 +515,55 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  exerciseBlockActive: {
+    borderColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
   exerciseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    gap: Spacing.sm,
+  },
+  dragHandle: {
+    marginRight: 2,
+  },
+  exerciseNameRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    overflow: 'hidden',
   },
   exerciseName: {
     color: Colors.text,
     fontSize: Typography.size.md,
     fontWeight: Typography.weight.bold,
+    flexShrink: 1,
+  },
+  muscleBadge: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    flexShrink: 0,
+  },
+  muscleBadgeText: {
+    color: Colors.textTertiary,
+    fontSize: Typography.size.xs,
+    fontWeight: Typography.weight.medium,
   },
   lastPerf: {
     color: Colors.textTertiary,
     fontSize: Typography.size.xs,
     paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.xs,
-    paddingTop: Spacing.xs,
+    paddingVertical: Spacing.xs,
   },
   setHeader: {
     flexDirection: 'row',
@@ -400,9 +591,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
     gap: Spacing.xs,
+    overflow: 'hidden',
   },
   setRowCompleted: {
-    opacity: 0.55,
+    opacity: 0.6,
+  },
+  flashOverlay: {
+    backgroundColor: Colors.primaryMuted,
+    borderRadius: 0,
+    zIndex: 1,
   },
   setNumber: {
     color: Colors.textSecondary,
@@ -431,7 +628,6 @@ const styles = StyleSheet.create({
     width: 36,
     alignItems: 'center',
   },
-  checkButtonDone: {},
   deleteSetBtn: {
     width: 24,
     alignItems: 'center',
@@ -473,5 +669,58 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: Typography.size.md,
     fontWeight: Typography.weight.bold,
+  },
+  // Discard sheet
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  sheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    paddingBottom: Spacing.xxxl,
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderTopWidth: 1,
+    borderColor: Colors.border,
+  },
+  sheetEmoji: { fontSize: 32 },
+  sheetTitle: {
+    color: Colors.text,
+    fontSize: Typography.size.xl,
+    fontWeight: Typography.weight.bold,
+  },
+  sheetSub: {
+    color: Colors.textSecondary,
+    fontSize: Typography.size.md,
+    textAlign: 'center',
+  },
+  sheetButtons: {
+    width: '100%',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  keepBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+  },
+  keepBtnText: {
+    color: Colors.background,
+    fontSize: Typography.size.md,
+    fontWeight: Typography.weight.bold,
+  },
+  discardBtn: {
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+  },
+  discardBtnText: {
+    color: Colors.error,
+    fontSize: Typography.size.md,
+    fontWeight: Typography.weight.semibold,
   },
 });

@@ -117,6 +117,9 @@ function seedSettingsIfEmpty(database: SQLite.SQLiteDatabase): void {
     { key: 'weight_unit', value: 'kg' },
     { key: 'active_routine_id', value: '' },
     { key: 'last_used_routine_day_id', value: '' },
+    { key: 'current_phase', value: '' },
+    { key: 'phase_start_date', value: '' },
+    { key: 'phase_goal_weight', value: '' },
   ];
   for (const row of defaults) {
     database.runSync(

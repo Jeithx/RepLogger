@@ -1,10 +1,13 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { BorderRadius, Colors, Spacing, Typography } from '../../constants/theme';
 import { PRResult } from '../../types';
+import { getSetting } from '../../db/settingsQueries';
+import { formatVolume as fmtVol, kgToDisplay, WeightUnit } from '../../utils/weightUtils';
+import PROverlay from '../../components/PROverlay';
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -13,11 +16,6 @@ function formatDuration(seconds: number): string {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
-}
-
-function formatVolume(kg: number): string {
-  if (kg >= 1000) return `${(kg / 1000).toFixed(1)}t`;
-  return `${Math.round(kg)}kg`;
 }
 
 interface StatBoxProps {
@@ -36,9 +34,10 @@ function StatBox({ label, value }: StatBoxProps) {
 
 interface PRCardProps {
   pr: PRResult;
+  unit: WeightUnit;
 }
 
-function PRCard({ pr }: PRCardProps) {
+function PRCard({ pr, unit }: PRCardProps) {
   return (
     <View style={styles.prCard}>
       <View style={styles.prRow}>
@@ -46,9 +45,11 @@ function PRCard({ pr }: PRCardProps) {
         <Text style={styles.prExercise}>{pr.exerciseName}</Text>
       </View>
       <Text style={styles.prDetail}>
-        {pr.weightKg}kg × {pr.reps} reps
+        {kgToDisplay(pr.weightKg, unit)}{unit} × {pr.reps} reps
         {'  ·  '}
-        <Text style={styles.prEstimated}>{pr.estimated1rm.toFixed(1)}kg e1RM</Text>
+        <Text style={styles.prEstimated}>
+          ~{kgToDisplay(pr.estimated1rm, unit)} {unit} 1RM
+        </Text>
       </Text>
     </View>
   );
@@ -56,6 +57,16 @@ function PRCard({ pr }: PRCardProps) {
 
 export default function SummaryScreen() {
   const { summaryData, clearSummary } = useWorkoutStore();
+  const [unit, setUnit] = useState<WeightUnit>('kg');
+  const [showOverlay, setShowOverlay] = useState(false);
+
+  useEffect(() => {
+    const saved = getSetting('weight_unit');
+    setUnit(saved === 'lbs' ? 'lbs' : 'kg');
+    if ((summaryData?.newPRs.length ?? 0) > 0) {
+      setShowOverlay(true);
+    }
+  }, []);
 
   const handleDone = useCallback(() => {
     clearSummary();
@@ -89,7 +100,7 @@ export default function SummaryScreen() {
           <StatBox label="Duration" value={formatDuration(durationSeconds)} />
           <StatBox label="Exercises" value={String(exerciseCount)} />
           <StatBox label="Sets" value={String(totalSets)} />
-          <StatBox label="Volume" value={formatVolume(totalVolumeKg)} />
+          <StatBox label="Volume" value={fmtVol(totalVolumeKg, unit)} />
         </View>
 
         {/* New PRs */}
@@ -97,7 +108,7 @@ export default function SummaryScreen() {
           <View style={styles.prSection}>
             <Text style={styles.prSectionTitle}>New Personal Records</Text>
             {newPRs.map((pr, i) => (
-              <PRCard key={`${pr.exerciseName}-${i}`} pr={pr} />
+              <PRCard key={`${pr.exerciseName}-${i}`} pr={pr} unit={unit} />
             ))}
           </View>
         )}
@@ -115,6 +126,13 @@ export default function SummaryScreen() {
           <Text style={styles.doneButtonText}>Done</Text>
         </Pressable>
       </View>
+
+      <PROverlay
+        prs={newPRs}
+        unit={unit}
+        visible={showOverlay}
+        onDone={() => setShowOverlay(false)}
+      />
     </View>
   );
 }

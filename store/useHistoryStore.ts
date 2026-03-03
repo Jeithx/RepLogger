@@ -13,6 +13,7 @@ interface HistoryStore {
   workouts: WorkoutSummary[];
   isLoadingMore: boolean;
   hasMore: boolean;
+  hasLoadedOnce: boolean;
   selectedWorkout: WorkoutDetail | null;
   prs: PRWithName[];
   stats: StatsOverviewData;
@@ -30,13 +31,14 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
   workouts: [],
   isLoadingMore: false,
   hasMore: true,
+  hasLoadedOnce: false,
   selectedWorkout: null,
   prs: [],
   stats: { thisWeekCount: 0, thisMonthVolume: 0, streakWeeks: 0, totalWorkouts: 0 },
 
   loadWorkouts: () => {
     const data = getWorkoutHistory(PAGE_SIZE, 0);
-    set({ workouts: data, hasMore: data.length === PAGE_SIZE, isLoadingMore: false });
+    set({ workouts: data, hasMore: data.length === PAGE_SIZE, isLoadingMore: false, hasLoadedOnce: true });
   },
 
   loadMoreWorkouts: () => {

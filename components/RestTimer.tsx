@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { BorderRadius, Colors, Spacing, Typography } from '../constants/theme';
 
 const RING_SIZE = 120;
 const RING_STROKE = 6;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 interface Props {
   visible: boolean;
@@ -23,11 +29,17 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(1)).current;
+  const slideY = useSharedValue(SCREEN_HEIGHT * 0.5);
+
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: slideY.value }],
+  }));
 
   useEffect(() => {
     if (visible) {
       setRemaining(durationSeconds);
       progressAnim.setValue(1);
+      slideY.value = withSpring(0, { damping: 22, stiffness: 180 });
 
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -53,6 +65,7 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
       }, 1000);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      slideY.value = SCREEN_HEIGHT * 0.5;
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 150,
@@ -67,31 +80,21 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
 
   if (!visible) return null;
 
-  const circumference = Math.PI * (RING_SIZE - RING_STROKE);
-  const strokeDashoffset = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [circumference, 0],
-  });
+  const ringColor =
+    remaining === 0 ? Colors.success : remaining <= 10 ? Colors.error : Colors.primary;
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
-      <View style={styles.card}>
+      <Reanimated.View style={[styles.card, cardStyle]}>
         <Text style={styles.label}>Rest</Text>
 
         <View style={styles.ringContainer}>
           <View style={styles.ringOuter}>
-            <Animated.View
-              style={[
-                styles.ringProgress,
-                {
-                  borderColor: remaining === 0 ? Colors.success : Colors.primary,
-                },
-              ]}
-            />
+            <View style={[styles.ringProgress, { borderColor: ringColor }]} />
           </View>
           <View style={styles.countdownContainer}>
-            <Text style={[styles.countdown, remaining === 0 && styles.countdownDone]}>
+            <Text style={[styles.countdown, remaining === 0 && styles.countdownDone, remaining <= 10 && remaining > 0 && styles.countdownWarning]}>
               {formatTime(remaining)}
             </Text>
           </View>
@@ -106,7 +109,7 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
         >
           <Text style={styles.skipText}>Skip</Text>
         </Pressable>
-      </View>
+      </Reanimated.View>
     </Animated.View>
   );
 }
@@ -171,6 +174,9 @@ const styles = StyleSheet.create({
   },
   countdownDone: {
     color: Colors.success,
+  },
+  countdownWarning: {
+    color: Colors.error,
   },
   skipButton: {
     paddingHorizontal: Spacing.xl,

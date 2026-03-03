@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useHistoryStore } from '../../store/useHistoryStore';
+import { getSetting } from '../../db/settingsQueries';
+import { kgToDisplay, formatVolume as fmtVol, WeightUnit } from '../../utils/weightUtils';
 import { WorkoutDetailExercise } from '../../types';
 import { BorderRadius, Colors, Spacing, Typography } from '../../constants/theme';
 
@@ -22,11 +24,6 @@ function formatDuration(seconds: number): string {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m`;
   return '<1m';
-}
-
-function formatVolume(vol: number): string {
-  if (vol >= 1000) return `${(vol / 1000).toFixed(1)}k kg`;
-  return `${Math.round(vol)} kg`;
 }
 
 function findMostVolumeExercise(exercises: WorkoutDetailExercise[]): WorkoutDetailExercise | null {
@@ -55,8 +52,11 @@ export default function WorkoutDetailScreen() {
   const loadWorkoutDetail = useHistoryStore((s) => s.loadWorkoutDetail);
   const clearSelectedWorkout = useHistoryStore((s) => s.clearSelectedWorkout);
   const workout = useHistoryStore((s) => s.selectedWorkout);
+  const [unit, setUnit] = useState<WeightUnit>('kg');
 
   useEffect(() => {
+    const saved = getSetting('weight_unit');
+    setUnit(saved === 'lbs' ? 'lbs' : 'kg');
     loadWorkoutDetail(workoutId);
     return () => clearSelectedWorkout();
   }, [workoutId, loadWorkoutDetail, clearSelectedWorkout]);
@@ -108,7 +108,7 @@ export default function WorkoutDetailScreen() {
             <Text style={styles.statLabel}>Sets</Text>
           </View>
           <View style={[styles.statCell, styles.statCellBorder]}>
-            <Text style={styles.statValue}>{formatVolume(workout.totalVolume)}</Text>
+            <Text style={styles.statValue}>{fmtVol(workout.totalVolume, unit)}</Text>
             <Text style={styles.statLabel}>Volume</Text>
           </View>
         </View>
@@ -120,7 +120,7 @@ export default function WorkoutDetailScreen() {
           <View key={ex.exerciseId} style={styles.exerciseCard}>
             <View style={styles.exerciseHeader}>
               <Text style={styles.exerciseName}>{ex.exerciseName}</Text>
-              <Text style={styles.exerciseVolume}>{formatVolume(ex.totalVolume)}</Text>
+              <Text style={styles.exerciseVolume}>{fmtVol(ex.totalVolume, unit)}</Text>
             </View>
             <View style={styles.setHeaderRow}>
               <Text style={styles.setHeaderCell}>SET</Text>
@@ -131,15 +131,15 @@ export default function WorkoutDetailScreen() {
             {ex.sets.map((s) => (
               <View key={s.setNumber} style={styles.setRow}>
                 <Text style={styles.setCell}>{s.setNumber}</Text>
-                <Text style={styles.setCell}>{s.weightKg}kg</Text>
+                <Text style={styles.setCell}>{kgToDisplay(s.weightKg, unit)}{unit}</Text>
                 <Text style={styles.setCell}>{s.reps}</Text>
-                <Text style={styles.setCell}>{Math.round(s.volume)}kg</Text>
+                <Text style={styles.setCell}>{fmtVol(s.volume, unit)}</Text>
               </View>
             ))}
           </View>
         ))}
 
-        {/* Stats section */}
+        {/* Highlights */}
         <Text style={styles.sectionLabel}>HIGHLIGHTS</Text>
 
         <View style={styles.highlightCard}>
@@ -149,7 +149,7 @@ export default function WorkoutDetailScreen() {
               <View style={styles.highlightInfo}>
                 <Text style={styles.highlightLabel}>Most Volume</Text>
                 <Text style={styles.highlightValue}>
-                  {mostVolume.exerciseName} · {formatVolume(mostVolume.totalVolume)}
+                  {mostVolume.exerciseName} · {fmtVol(mostVolume.totalVolume, unit)}
                 </Text>
               </View>
             </View>
@@ -160,7 +160,7 @@ export default function WorkoutDetailScreen() {
               <View style={styles.highlightInfo}>
                 <Text style={styles.highlightLabel}>Heaviest Set</Text>
                 <Text style={styles.highlightValue}>
-                  {heaviestSet.exerciseName} · {heaviestSet.weightKg}kg × {heaviestSet.reps}
+                  {heaviestSet.exerciseName} · {kgToDisplay(heaviestSet.weightKg, unit)}{unit} × {heaviestSet.reps}
                 </Text>
               </View>
             </View>
@@ -177,7 +177,8 @@ export default function WorkoutDetailScreen() {
                 <View style={styles.prInfo}>
                   <Text style={styles.prName}>{pr.exerciseName}</Text>
                   <Text style={styles.prDetail}>
-                    {pr.weight_kg}kg × {pr.reps} reps · ~{Math.round(pr.estimated_1rm)}kg 1RM
+                    {kgToDisplay(pr.weight_kg, unit)}{unit} × {pr.reps} reps
+                    {' '}· ~{kgToDisplay(pr.estimated_1rm, unit)} {unit} 1RM
                   </Text>
                 </View>
               </View>
