@@ -15,9 +15,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useRoutineStore } from '../../store/useRoutineStore';
 import { getRecentWorkouts } from '../../db/workoutQueries';
+import { getWeekStats } from '../../db/historyQueries';
 import { addBodyWeightEntry, getLatestBodyWeightEntry } from '../../db/bodyWeightQueries';
 import { Workout, RoutineDayWithExercises } from '../../types';
 import { BorderRadius, Colors, Spacing, Typography } from '../../constants/theme';
+
+function formatVolumeStat(vol: number): string {
+  if (vol >= 1000) return `${(vol / 1000).toFixed(1)}k`;
+  return String(Math.round(vol));
+}
 
 function formatDate(isoString: string): string {
   const d = new Date(isoString);
@@ -175,12 +181,14 @@ export default function HomeScreen() {
   const [bodyWeightInput, setBodyWeightInput] = useState('');
   const [latestWeight, setLatestWeight] = useState<number | null>(null);
   const [wSaved, setWSaved] = useState(false);
+  const [weekStats, setWeekStats] = useState<{ count: number; volume: number }>({ count: 0, volume: 0 });
 
   const refresh = useCallback(() => {
     const recents = getRecentWorkouts(1);
     setLastWorkout(recents[0] ?? null);
     const latest = getLatestBodyWeightEntry();
     setLatestWeight(latest?.weight_kg ?? null);
+    setWeekStats(getWeekStats());
   }, []);
 
   useEffect(() => {
@@ -246,6 +254,18 @@ export default function HomeScreen() {
         </Pressable>
       ) : (
         <TodaysCard onStartWithDay={handleStartWithDay} onStartBlank={handleStartBlank} />
+      )}
+
+      {!activeWorkout && weekStats.count > 0 && (
+        <Pressable
+          style={({ pressed }) => [styles.statsStrip, pressed && styles.statsStripPressed]}
+          onPress={() => router.push('/(tabs)/history')}
+        >
+          <Text style={styles.statsStripText}>
+            This week: {weekStats.count} workout{weekStats.count !== 1 ? 's' : ''} · {formatVolumeStat(weekStats.volume)} kg
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color={Colors.textTertiary} />
+        </Pressable>
       )}
 
       <View style={styles.section}>
@@ -512,4 +532,20 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weight.semibold,
   },
   swapDayMeta: { color: Colors.textSecondary, fontSize: Typography.size.sm },
+  statsStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  statsStripPressed: { opacity: 0.8 },
+  statsStripText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: Typography.size.sm,
+  },
 });

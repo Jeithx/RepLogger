@@ -9,6 +9,7 @@ import {
 } from '../db/workoutQueries';
 import { getRoutineDayExercisesWithNames } from '../db/routineQueries';
 import { setSetting } from '../db/settingsQueries';
+import { useHistoryStore } from './useHistoryStore';
 
 interface SummaryData {
   workoutId: number;
@@ -227,6 +228,8 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       if (activeWorkout.routineDayId) {
         setSetting('last_used_routine_day_id', String(activeWorkout.routineDayId));
       }
+
+      useHistoryStore.getState().loadPRs();
 
       set({
         activeWorkout: null,

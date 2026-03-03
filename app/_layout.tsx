@@ -30,6 +30,7 @@ export default function RootLayout() {
         <Stack.Screen name="routines/builder" />
         <Stack.Screen name="routines/day-editor" />
         <Stack.Screen name="routines/[id]" />
+        <Stack.Screen name="history/[id]" />
       </Stack>
     </>
   );

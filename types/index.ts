@@ -134,3 +134,85 @@ export interface RoutineDayWithExercises extends RoutineDay {
 export interface RoutineWithDays extends Routine {
   days: RoutineDayWithExercises[];
 }
+
+// ─── History types ─────────────────────────────────────────────────────────
+
+export interface WorkoutSummary {
+  id: number;
+  startedAt: string;
+  finishedAt: string;
+  durationSeconds: number;
+  exerciseCount: number;
+  totalVolume: number;
+  routineDayName: string | null;
+  exerciseNames: string;
+}
+
+export interface WorkoutDetailSet {
+  setNumber: number;
+  weightKg: number;
+  reps: number;
+  volume: number;
+}
+
+export interface WorkoutDetailExercise {
+  exerciseId: number;
+  exerciseName: string;
+  muscleGroup: string;
+  sets: WorkoutDetailSet[];
+  totalVolume: number;
+  bestWeightKg: number;
+  bestReps: number;
+}
+
+export interface WorkoutDetail {
+  id: number;
+  startedAt: string;
+  finishedAt: string;
+  durationSeconds: number;
+  totalVolume: number;
+  routineDayName: string | null;
+  exercises: WorkoutDetailExercise[];
+  sessionPRs: PRWithName[];
+}
+
+export interface ExerciseHistorySet {
+  weightKg: number;
+  reps: number;
+  estimated1rm: number;
+}
+
+export interface ExerciseSession {
+  workoutId: number;
+  date: string;
+  sets: ExerciseHistorySet[];
+}
+
+export interface BestSetPerSession {
+  date: string;
+  weightKg: number;
+  reps: number;
+  estimated1rm: number;
+}
+
+export interface PRWithName extends PersonalRecord {
+  exerciseName: string;
+  muscleGroup: string;
+}
+
+export interface WeeklyVolume {
+  weekStart: string;
+  totalVolume: number;
+}
+
+export interface MuscleGroupVolume {
+  muscleGroup: string;
+  volume: number;
+}
+
+export interface StatsOverviewData {
+  thisWeekCount: number;
+  thisMonthVolume: number;
+  streakWeeks: number;
+  totalWorkouts: number;
+}
