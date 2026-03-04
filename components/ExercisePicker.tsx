@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getDatabase } from '../db/database';
+import { useExerciseStore } from '../store/useExerciseStore';
 import { Exercise, MuscleGroup } from '../types';
 import { BorderRadius, Colors, Spacing, Typography } from '../constants/theme';
 
@@ -28,30 +28,18 @@ const MUSCLE_ORDER: MuscleGroup[] = [
   MuscleGroup.Shoulders,
   MuscleGroup.Arms,
   MuscleGroup.Core,
+  MuscleGroup.Cardio,
+  MuscleGroup.Other,
 ];
 
-function loadExercises(): Exercise[] {
-  try {
-    const db = getDatabase();
-    return db.getAllSync<Exercise>('SELECT * FROM exercises ORDER BY muscle_group, name;');
-  } catch (error) {
-    console.error('Failed to load exercises:', error);
-    return [];
-  }
-}
-
 export default function ExercisePicker({ visible, onSelect, onClose }: Props) {
+  const exercises = useExerciseStore((s) => s.exercises);
+  const loadExercises = useExerciseStore((s) => s.loadExercises);
   const [query, setQuery] = useState('');
-  const [exercises, setExercises] = useState<Exercise[]>([]);
   const inputRef = useRef<TextInput>(null);
 
-  useEffect(() => {
-    if (visible) {
-      setExercises(loadExercises());
-      setQuery('');
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [visible]);
+  // Reload when picker opens in case custom exercises were added
+  useEffect(() => { if (visible) { loadExercises(); } }, [visible, loadExercises]);
 
   const sections = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -59,12 +47,10 @@ export default function ExercisePicker({ visible, onSelect, onClose }: Props) {
       ? exercises.filter((e) => e.name.toLowerCase().includes(q))
       : exercises;
 
-    const grouped = MUSCLE_ORDER.map((group) => ({
+    return MUSCLE_ORDER.map((group) => ({
       group,
       data: filtered.filter((e) => e.muscle_group === group),
     })).filter((s) => s.data.length > 0);
-
-    return grouped;
   }, [query, exercises]);
 
   type ListItem =
@@ -82,6 +68,11 @@ export default function ExercisePicker({ visible, onSelect, onClose }: Props) {
     return items;
   }, [sections]);
 
+  const handleOpen = () => {
+    setQuery('');
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
   const renderItem = ({ item }: { item: ListItem }) => {
     if (item.type === 'header') {
       return <Text style={styles.groupHeader}>{item.group}</Text>;
@@ -96,9 +87,15 @@ export default function ExercisePicker({ visible, onSelect, onClose }: Props) {
         }}
       >
         <Text style={styles.exerciseName}>{exercise.name}</Text>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{exercise.muscle_group}</Text>
-        </View>
+        {exercise.is_custom === 1 ? (
+          <View style={styles.customBadge}>
+            <Text style={styles.customBadgeText}>Custom</Text>
+          </View>
+        ) : (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{exercise.muscle_group}</Text>
+          </View>
+        )}
       </Pressable>
     );
   };
@@ -109,6 +106,7 @@ export default function ExercisePicker({ visible, onSelect, onClose }: Props) {
       animationType="slide"
       presentationStyle="pageSheet"
       onRequestClose={onClose}
+      onShow={handleOpen}
     >
       <KeyboardAvoidingView
         style={styles.container}
@@ -222,6 +220,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   exerciseName: {
+    flex: 1,
     color: Colors.text,
     fontSize: Typography.size.md,
     fontWeight: Typography.weight.medium,
@@ -236,6 +235,19 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: Typography.size.xs,
     fontWeight: Typography.weight.medium,
+  },
+  customBadge: {
+    backgroundColor: Colors.primaryMuted,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  customBadgeText: {
+    color: Colors.primary,
+    fontSize: Typography.size.xs,
+    fontWeight: Typography.weight.semibold,
   },
   emptyText: {
     color: Colors.textTertiary,

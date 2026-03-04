@@ -233,6 +233,12 @@ export default function SettingsScreen() {
             onChange={handleRestChange}
           />
         </View>
+        <View style={styles.divider} />
+        <DataRow
+          label="Manage Exercises"
+          icon="🏋️"
+          onPress={() => router.push('/exercises')}
+        />
       </View>
 
       {/* ── Data ────────────────────────────────── */}

@@ -7,6 +7,8 @@ export enum MuscleGroup {
   Shoulders = 'Shoulders',
   Arms = 'Arms',
   Core = 'Core',
+  Cardio = 'Cardio',
+  Other = 'Other',
 }
 
 export interface Exercise {
