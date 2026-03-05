@@ -1,7 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { MuscleGroup } from '../types';
 
-const DB_NAME = 'replogger.db';
+const DB_NAME = 'hrmetrics.db';
 
 let db: SQLite.SQLiteDatabase | null = null;
 let dbInitialized = false;

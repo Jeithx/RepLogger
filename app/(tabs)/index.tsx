@@ -302,7 +302,7 @@ export default function HomeScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.pageTitle}>RepLogger</Text>
+      <Text style={styles.pageTitle}>HRmetrics</Text>
 
       {activeWorkout ? (
         <Pressable

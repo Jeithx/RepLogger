@@ -1,4 +1,4 @@
-# RepLogger
+# HRmetrics
 
 A minimalist, fully offline workout tracking app built with React Native and Expo.
 
