@@ -144,13 +144,13 @@ export default function SettingsScreen() {
                 `${r.date},"${r.exercise}","${r.muscleGroup}",${r.set},${r.weightKg},${r.reps}`
             )
             .join('\n');
-        filename = 'replogger_workouts.csv';
+        filename = 'hrmetrics_workouts.csv';
       } else {
         const rows = getBodyWeightForExport();
         csv =
           'Date,Weight (kg),Notes\n' +
           rows.map((r) => `${r.date},${r.weightKg},"${r.notes ?? ''}"`).join('\n');
-        filename = 'replogger_bodyweight.csv';
+        filename = 'hrmetrics_bodyweight.csv';
       }
       const uri = (FileSystem.cacheDirectory ?? '') + filename;
       await FileSystem.writeAsStringAsync(uri, csv, {

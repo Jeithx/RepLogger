@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "RepLogger",
-    "slug": "replogger",
+    "name": "HRmetrics",
+    "slug": "hrmetrics",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "dark",
-    "scheme": "replogger",
+    "scheme": "hrmetrics",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -18,13 +18,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0F0F0F",
-        "foregroundImage": "./assets/icon.png",
-        "backgroundImage": "./assets/icon.png",
-        "monochromeImage": "./assets/icon.png"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
       },
-      "predictiveBackGestureEnabled": false,
-      "package": "com.jeithx.replogger"
+      "package": "com.jeithx.hrmetrics"
     },
     "web": {
       "bundler": "metro",

@@ -55,7 +55,7 @@ export default function BackupScreen() {
       const data = exportFullBackup();
       const json = JSON.stringify(data, null, 2);
       const today = new Date().toISOString().slice(0, 10);
-      const filename = `RepLogger_backup_${today}.json`;
+      const filename = `HRmetrics_backup_${today}.json`;
       const uri = (FileSystem.cacheDirectory ?? '') + filename;
 
       await FileSystem.writeAsStringAsync(uri, json, {
@@ -112,7 +112,7 @@ export default function BackupScreen() {
         parsed === null ||
         (parsed as Record<string, unknown>)['version'] !== 1
       ) {
-        showToast('This file is not a RepLogger backup', 'error');
+        showToast('This file is not a HRmetrics backup', 'error');
         setIsImporting(false);
         return;
       }
@@ -155,10 +155,10 @@ export default function BackupScreen() {
 
   const backupStats = pendingBackup
     ? {
-        workouts: pendingBackup.workouts.length,
-        routines: pendingBackup.routines.length,
-        bodyWeight: pendingBackup.bodyWeightEntries.length,
-      }
+      workouts: pendingBackup.workouts.length,
+      routines: pendingBackup.routines.length,
+      bodyWeight: pendingBackup.bodyWeightEntries.length,
+    }
     : null;
 
   return (
