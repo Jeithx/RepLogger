@@ -48,7 +48,11 @@ export default function RootLayout() {
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
         const id = response.notification.request.identifier;
-        if (id.startsWith('workout-')) {
+        if (id === 'workout-active-ongoing') {
+          router.push('/workout/active');
+        } else if (id.startsWith('rest-timer')) {
+          router.push('/workout/active');
+        } else if (id.startsWith('workout-')) {
           router.push('/(tabs)');
         } else if (id.startsWith('water-')) {
           router.push('/water');

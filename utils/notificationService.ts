@@ -23,6 +23,17 @@ if (Platform.OS === 'android') {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#C8FF00',
     });
+    Notifications.setNotificationChannelAsync('workout-active', {
+        name: 'Active Workout',
+        importance: Notifications.AndroidImportance.LOW,
+        showBadge: false,
+    });
+    Notifications.setNotificationChannelAsync('rest-timer', {
+        name: 'Rest Timer',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        vibrationPattern: [0, 200, 100, 200],
+        lightColor: '#C8FF00',
+    });
 }
 
 // ── Identifier prefixes ──────────────────────────────────────────────────────
@@ -253,6 +264,105 @@ export async function scheduleWeightReminder(
     } catch (error) {
         console.error('scheduleWeightReminder failed:', error);
     }
+}
+
+// ── Active Workout Notification ───────────────────────────────────────────────
+
+const WORKOUT_ACTIVE_ID = 'workout-active-ongoing';
+
+export async function showWorkoutActiveNotification(startTimestamp: number): Promise<void> {
+    try {
+        await Notifications.scheduleNotificationAsync({
+            identifier: WORKOUT_ACTIVE_ID,
+            content: {
+                title: 'Workout in progress',
+                body: 'Tap to return to your workout',
+                sticky: true,
+                ...(Platform.OS === 'android' && {
+                    android: {
+                        channelId: 'workout-active',
+                        ongoing: true,
+                        sticky: true,
+                        usesChronometer: true,
+                        showWhen: true,
+                        when: startTimestamp,
+                        priority: Notifications.AndroidNotificationPriority.LOW,
+                    } as any,
+                }),
+            },
+            trigger: null,
+        });
+    } catch (error) {
+        console.error('showWorkoutActiveNotification failed:', error);
+    }
+}
+
+export async function dismissWorkoutActiveNotification(): Promise<void> {
+    try {
+        await Notifications.dismissNotificationAsync(WORKOUT_ACTIVE_ID);
+    } catch { /* notification may not exist */ }
+}
+
+// ── Rest Timer Notification ───────────────────────────────────────────────────
+
+const REST_TIMER_ID = 'rest-timer-ongoing';
+const REST_COMPLETE_ID = 'rest-timer-complete';
+
+export async function showRestTimerNotification(endTimestamp: number): Promise<void> {
+    try {
+        await Notifications.dismissNotificationAsync(REST_TIMER_ID).catch(() => { });
+        await Notifications.cancelScheduledNotificationAsync(REST_COMPLETE_ID).catch(() => { });
+
+        await Notifications.scheduleNotificationAsync({
+            identifier: REST_TIMER_ID,
+            content: {
+                title: 'Rest Timer',
+                body: 'Resting — tap to return',
+                sticky: true,
+                ...(Platform.OS === 'android' && {
+                    android: {
+                        channelId: 'rest-timer',
+                        ongoing: true,
+                        sticky: true,
+                        usesChronometer: true,
+                        chronometerCountDown: true,
+                        showWhen: true,
+                        when: endTimestamp,
+                        priority: Notifications.AndroidNotificationPriority.DEFAULT,
+                    } as any,
+                }),
+            },
+            trigger: null,
+        });
+
+        const delaySeconds = Math.ceil((endTimestamp - Date.now()) / 1000);
+        if (delaySeconds > 0) {
+            await Notifications.scheduleNotificationAsync({
+                identifier: REST_COMPLETE_ID,
+                content: {
+                    title: 'Rest Complete!',
+                    body: 'Time to get back to work 💪',
+                    sound: 'default',
+                    ...(Platform.OS === 'android' && {
+                        android: { channelId: 'rest-timer' },
+                    }),
+                },
+                trigger: {
+                    type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+                    seconds: delaySeconds,
+                },
+            });
+        }
+    } catch (error) {
+        console.error('showRestTimerNotification failed:', error);
+    }
+}
+
+export async function dismissRestTimerNotification(): Promise<void> {
+    try {
+        await Notifications.dismissNotificationAsync(REST_TIMER_ID).catch(() => { });
+        await Notifications.cancelScheduledNotificationAsync(REST_COMPLETE_ID).catch(() => { });
+    } catch { /* ignore */ }
 }
 
 // ── Debug ────────────────────────────────────────────────────────────────────

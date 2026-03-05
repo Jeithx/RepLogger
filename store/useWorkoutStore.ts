@@ -24,6 +24,7 @@ interface SummaryData {
 interface WorkoutStore {
   activeWorkout: ActiveWorkout | null;
   elapsedSeconds: number;
+  workoutStartTime: number | null;
   timerInterval: ReturnType<typeof setInterval> | null;
   summaryData: SummaryData | null;
 
@@ -43,14 +44,16 @@ interface WorkoutStore {
 export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
   activeWorkout: null,
   elapsedSeconds: 0,
+  workoutStartTime: null,
   timerInterval: null,
   summaryData: null,
 
   startWorkout: (routineDayId?: number) => {
     try {
       const workoutId = createWorkoutDB(routineDayId ?? null);
+      const startTime = Date.now();
       const interval = setInterval(() => {
-        set((state) => ({ elapsedSeconds: state.elapsedSeconds + 1 }));
+        set({ elapsedSeconds: Math.round((Date.now() - startTime) / 1000) });
       }, 1000);
 
       const savedUnit = getSetting('weight_unit');
@@ -79,6 +82,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
           exercises,
         },
         elapsedSeconds: 0,
+        workoutStartTime: startTime,
         timerInterval: interval,
         summaryData: null,
       });
@@ -246,6 +250,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       set({
         activeWorkout: null,
         elapsedSeconds: 0,
+        workoutStartTime: null,
         timerInterval: null,
         summaryData: {
           workoutId: activeWorkout.id,
@@ -271,7 +276,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
         console.error('Failed to delete workout on discard:', error);
       }
     }
-    set({ activeWorkout: null, elapsedSeconds: 0, timerInterval: null, summaryData: null });
+    set({ activeWorkout: null, elapsedSeconds: 0, workoutStartTime: null, timerInterval: null, summaryData: null });
   },
 
   clearSummary: () => set({ summaryData: null }),

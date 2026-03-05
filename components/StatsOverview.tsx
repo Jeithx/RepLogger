@@ -48,6 +48,7 @@ const styles = StyleSheet.create({
   row: {
     paddingHorizontal: Spacing.lg,
     gap: Spacing.sm,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.xs,
   },
   card: {

@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AppState,
+  AppStateStatus,
   Modal,
   Pressable,
   StyleSheet,
@@ -7,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DraggableFlatList, {
@@ -31,6 +34,7 @@ import ExercisePicker from '../../components/ExercisePicker';
 import RestTimer from '../../components/RestTimer';
 import { ActiveExercise, ActiveSet, LastPerformanceSet } from '../../types';
 import { BorderRadius, Colors, Spacing, Typography } from '../../constants/theme';
+import { showWorkoutActiveNotification, dismissWorkoutActiveNotification } from '../../utils/notificationService';
 
 function formatElapsed(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -302,13 +306,15 @@ function DiscardSheet({ visible, completedSets, onKeep, onDiscard }: DiscardShee
 // ─── Active Workout Screen ─────────────────────────────────────────────────
 
 export default function ActiveWorkoutScreen() {
-  const { activeWorkout, elapsedSeconds, finishWorkout, discardWorkout, summaryData, reorderExercises } =
+  const { activeWorkout, elapsedSeconds, workoutStartTime, finishWorkout, discardWorkout, summaryData, reorderExercises } =
     useWorkoutStore();
   const [pickerVisible, setPickerVisible] = useState(false);
   const [restTimerVisible, setRestTimerVisible] = useState(false);
   const [discardVisible, setDiscardVisible] = useState(false);
   const [unit, setUnit] = useState<WeightUnit>('kg');
   const [restSeconds, setRestSeconds] = useState(90);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const savedUnit = getSetting('weight_unit');
@@ -316,6 +322,32 @@ export default function ActiveWorkoutScreen() {
     setUnit(savedUnit === 'lbs' ? 'lbs' : 'kg');
     setRestSeconds(savedRest ? parseInt(savedRest, 10) : 90);
   }, []);
+
+  // Show persistent notification when app is backgrounded during a workout
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (!activeWorkout) return;
+
+      if (prev === 'active' && nextState !== 'active') {
+        const startTs = workoutStartTime ?? Date.now();
+        showWorkoutActiveNotification(startTs).catch(() => { });
+      } else if (prev !== 'active' && nextState === 'active') {
+        dismissWorkoutActiveNotification().catch(() => { });
+      }
+    });
+
+    return () => subscription.remove();
+  }, [activeWorkout, workoutStartTime]);
+
+  // Dismiss notification when workout is finished/discarded
+  useEffect(() => {
+    if (!activeWorkout) {
+      dismissWorkoutActiveNotification().catch(() => { });
+    }
+  }, [activeWorkout]);
 
   useEffect(() => {
     if (summaryData) {
@@ -363,7 +395,7 @@ export default function ActiveWorkoutScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Spacing.md + insets.top }]}>
         <Pressable onPress={() => setDiscardVisible(true)} style={styles.headerBtn}>
           <Text style={styles.discardText}>Discard</Text>
         </Pressable>
@@ -400,11 +432,11 @@ export default function ActiveWorkoutScreen() {
             <Text style={styles.emptySubtitle}>Tap "+ Add Exercise" to get started</Text>
           </View>
         }
-        ListFooterComponent={<View style={{ height: 100 }} />}
+        ListFooterComponent={<View style={{ height: 120 + insets.bottom }} />}
       />
 
       {/* FAB */}
-      <View style={styles.fab}>
+      <View style={[styles.fab, { bottom: Spacing.lg + insets.bottom }]}>
         <Pressable
           style={({ pressed }) => [styles.fabButton, pressed && styles.fabButtonPressed]}
           onPress={() => setPickerVisible(true)}
