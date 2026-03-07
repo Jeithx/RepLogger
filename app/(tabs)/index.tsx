@@ -251,12 +251,7 @@ function getRexGreeting(): string {
   return 'Late night? Here\'s a quick recap.';
 }
 
-interface RexInsightCardProps {
-  insight: Insight;
-  onDismiss: () => void;
-}
-
-function RexInsightCard({ insight, onDismiss }: RexInsightCardProps) {
+function RexInsightCard({ insight }: { insight: Insight }) {
   const accent = CATEGORY_COLOR[insight.category] ?? Colors.primary;
   return (
     <View style={[rexStyles.insightCard, { borderLeftColor: accent }]}>
@@ -276,12 +271,6 @@ function RexInsightCard({ insight, onDismiss }: RexInsightCardProps) {
             </Pressable>
           )}
         </View>
-        <Pressable
-          onPress={(e) => { e.stopPropagation(); onDismiss(); }}
-          style={rexStyles.dismissBtn}
-        >
-          <Ionicons name="close" size={16} color={Colors.textTertiary} />
-        </Pressable>
       </View>
     </View>
   );
@@ -292,7 +281,7 @@ interface RexSectionProps {
 }
 
 function RexSection({ onRexTap }: RexSectionProps) {
-  const { insights, isLoading, dismissInsight, generateAndLoad } = useInsightStore();
+  const { insights, isLoading, generateAndLoad } = useInsightStore();
   const prevLength = useRef(insights.length);
   const [bounceRex, setBounceRex] = useState(false);
 
@@ -342,7 +331,6 @@ function RexSection({ onRexTap }: RexSectionProps) {
           <RexInsightCard
             key={insight.id}
             insight={insight}
-            onDismiss={() => dismissInsight(insight.id)}
           />
         ))
       )}
@@ -889,14 +877,6 @@ const rexStyles = StyleSheet.create({
   actionBtnText: {
     fontSize: Typography.size.xs,
     fontWeight: Typography.weight.semibold,
-  },
-  dismissBtn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: Spacing.xs,
-    flexShrink: 0,
   },
   emptyCard: {
     padding: Spacing.md,

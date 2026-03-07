@@ -21,19 +21,13 @@ const CATEGORY_COLOR: Record<string, string> = {
   milestone: '#A78BFA',
 };
 
-function InsightCard({ insight, onDismiss }: { insight: Insight; onDismiss: () => void }) {
+function InsightCard({ insight }: { insight: Insight }) {
   const accent = CATEGORY_COLOR[insight.category] ?? Colors.primary;
   return (
     <View style={[styles.insightCard, { borderLeftColor: accent }]}>
       <View style={styles.insightHeader}>
         <Text style={styles.insightIcon}>{insight.icon}</Text>
         <Text style={styles.insightTitle}>{insight.title}</Text>
-        <Pressable
-          onPress={(e) => { e.stopPropagation(); onDismiss(); }}
-          style={styles.dismissBtn}
-        >
-          <Ionicons name="close" size={16} color={Colors.textTertiary} />
-        </Pressable>
       </View>
       <Text style={styles.insightMessage}>{insight.message}</Text>
       {insight.actionLabel && insight.actionRoute && (
@@ -50,7 +44,7 @@ function InsightCard({ insight, onDismiss }: { insight: Insight; onDismiss: () =
 
 export default function RexScreen() {
   const insets = useSafeAreaInsets();
-  const { insights, isLoading, lastGeneratedAt, refreshInsights, dismissInsight, generateAndLoad } =
+  const { insights, isLoading, lastGeneratedAt, refreshInsights, generateAndLoad } =
     useInsightStore();
 
   useFocusEffect(
@@ -130,7 +124,6 @@ export default function RexScreen() {
           <InsightCard
             key={insight.id}
             insight={insight}
-            onDismiss={() => dismissInsight(insight.id)}
           />
         ))
       )}
@@ -235,14 +228,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-  },
-  dismissBtn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 'auto',
-    flexShrink: 0,
   },
   insightIcon: { fontSize: 20 },
   insightTitle: {
