@@ -8,6 +8,7 @@ import { getSetting } from '../db/settingsQueries';
 import { useRoutineStore } from '../store/useRoutineStore';
 import { useWaterStore } from '../store/useWaterStore';
 import { useExerciseStore } from '../store/useExerciseStore';
+import { useInsightStore } from '../store/useInsightStore';
 import { requestPermissions } from '../utils/notificationService';
 import { Colors } from '../constants/theme';
 import Toast from '../components/Toast';
@@ -18,6 +19,7 @@ export default function RootLayout() {
   const loadWaterToday = useWaterStore((s) => s.loadToday);
   const loadWaterSettings = useWaterStore((s) => s.loadSettings);
   const loadExercises = useExerciseStore((s) => s.loadExercises);
+  const generateInsights = useInsightStore((s) => s.generateAndLoad);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export default function RootLayout() {
         } else {
           loadRoutines();
           loadTodaysDay();
+          generateInsights();
         }
 
         // Request notification permissions once on first launch
@@ -85,6 +88,7 @@ export default function RootLayout() {
         <Stack.Screen name="exercises/index" />
         <Stack.Screen name="settings/backup" />
         <Stack.Screen name="settings/notifications" />
+        <Stack.Screen name="rex" />
       </Stack>
       <Toast />
     </GestureHandlerRootView>

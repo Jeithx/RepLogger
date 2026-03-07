@@ -11,6 +11,7 @@ import { getRoutineDayExercisesWithNames } from '../db/routineQueries';
 import { setSetting, getSetting } from '../db/settingsQueries';
 import { displayToKg, kgToDisplay } from '../utils/weightUtils';
 import { useHistoryStore } from './useHistoryStore';
+import { useInsightStore } from './useInsightStore';
 
 interface SummaryData {
   workoutId: number;
@@ -246,6 +247,7 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       }
 
       useHistoryStore.getState().loadPRs();
+      useInsightStore.getState().generateAndLoad();
 
       set({
         activeWorkout: null,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -16,6 +16,7 @@ import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useRoutineStore } from '../../store/useRoutineStore';
 import { useBodyWeightStore } from '../../store/useBodyWeightStore';
 import { useWaterStore } from '../../store/useWaterStore';
+import { useInsightStore } from '../../store/useInsightStore';
 import { getRecentWorkouts } from '../../db/workoutQueries';
 import { getWeekStats } from '../../db/historyQueries';
 import { getSetting } from '../../db/settingsQueries';
@@ -23,6 +24,16 @@ import { kgToDisplay, formatVolume, WeightUnit } from '../../utils/weightUtils';
 import { formatWater } from '../../utils/waterUtils';
 import { BodyWeightEntry, Workout, RoutineDayWithExercises } from '../../types';
 import { BorderRadius, Colors, Spacing, Typography } from '../../constants/theme';
+import RexMascot, { moodFromInsight } from '../../components/RexMascot';
+import type { Insight } from '../../utils/insightEngine';
+
+const CATEGORY_COLOR: Record<string, string> = {
+  workout: Colors.primary,
+  weight: '#FF9500',
+  water: '#4FC3F7',
+  recovery: '#FF6B6B',
+  milestone: '#A78BFA',
+};
 
 const WATER_COLOR = '#4FC3F7';
 
@@ -230,6 +241,115 @@ function TodaysCard({ onStartWithDay, onStartBlank }: TodaysCardProps) {
   );
 }
 
+// ─── REX helpers ───────────────────────────────────────────────────────────
+
+function getRexGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return 'Good morning! Here\'s your daily brief.';
+  if (hour >= 11 && hour < 17) return 'Hey! Here\'s what I noticed.';
+  if (hour >= 17 && hour < 21) return 'Evening check-in. Here\'s the scoop.';
+  return 'Late night? Here\'s a quick recap.';
+}
+
+interface RexInsightCardProps {
+  insight: Insight;
+  onDismiss: () => void;
+}
+
+function RexInsightCard({ insight, onDismiss }: RexInsightCardProps) {
+  const accent = CATEGORY_COLOR[insight.category] ?? Colors.primary;
+  return (
+    <View style={[rexStyles.insightCard, { borderLeftColor: accent }]}>
+      <View style={rexStyles.insightRow}>
+        <Text style={rexStyles.insightIcon}>{insight.icon}</Text>
+        <View style={rexStyles.insightBody}>
+          <Text style={rexStyles.insightTitle}>{insight.title}</Text>
+          <Text style={rexStyles.insightMessage}>{insight.message}</Text>
+          {insight.actionLabel && insight.actionRoute && (
+            <Pressable
+              onPress={() => router.push(insight.actionRoute as never)}
+              style={rexStyles.actionBtn}
+            >
+              <Text style={[rexStyles.actionBtnText, { color: accent }]}>
+                {insight.actionLabel} →
+              </Text>
+            </Pressable>
+          )}
+        </View>
+        <Pressable
+          onPress={(e) => { e.stopPropagation(); onDismiss(); }}
+          style={rexStyles.dismissBtn}
+        >
+          <Ionicons name="close" size={16} color={Colors.textTertiary} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+interface RexSectionProps {
+  onRexTap: () => void;
+}
+
+function RexSection({ onRexTap }: RexSectionProps) {
+  const { insights, isLoading, dismissInsight, generateAndLoad } = useInsightStore();
+  const prevLength = useRef(insights.length);
+  const [bounceRex, setBounceRex] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      generateAndLoad();
+    }, [generateAndLoad])
+  );
+
+  useEffect(() => {
+    if (insights.length > 0 && prevLength.current === 0) {
+      setBounceRex(true);
+      setTimeout(() => setBounceRex(false), 600);
+    }
+    prevLength.current = insights.length;
+  }, [insights.length]);
+
+  const topInsight = insights[0];
+  const mood = moodFromInsight(topInsight?.id);
+  const greeting = getRexGreeting();
+
+  return (
+    <View style={rexStyles.container}>
+      {/* Header row: REX face + greeting */}
+      <Pressable style={rexStyles.header} onPress={onRexTap}>
+        <RexMascot mood={mood} size={56} animated onBounce={bounceRex} />
+        <View style={rexStyles.greetingBox}>
+          <Text style={rexStyles.rexLabel}>REX</Text>
+          <Text style={rexStyles.greeting}>{greeting}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+      </Pressable>
+
+      {/* Insight cards */}
+      {isLoading ? (
+        <View style={rexStyles.emptyCard}>
+          <Text style={rexStyles.emptyText}>Analyzing...</Text>
+        </View>
+      ) : insights.length === 0 ? (
+        <View style={rexStyles.emptyCard}>
+          <Text style={rexStyles.emptyText}>
+            All good. Nothing to report today. Just show up.
+          </Text>
+        </View>
+      ) : (
+        insights.map((insight) => (
+          <RexInsightCard
+            key={insight.id}
+            insight={insight}
+            onDismiss={() => dismissInsight(insight.id)}
+          />
+        ))
+      )}
+    </View>
+  );
+}
+
 // ─── Home Screen ───────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
@@ -410,6 +530,8 @@ export default function HomeScreen() {
           </View>
         </View>
       )}
+
+      <RexSection onRexTap={() => router.push('/rex')} />
     </ScrollView>
   );
 }
@@ -710,5 +832,78 @@ const styles = StyleSheet.create({
     color: WATER_COLOR,
     fontSize: Typography.size.sm,
     fontWeight: Typography.weight.semibold,
+  },
+});
+
+const rexStyles = StyleSheet.create({
+  container: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 0,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  greetingBox: { flex: 1, gap: 2 },
+  rexLabel: {
+    color: Colors.primary,
+    fontSize: Typography.size.xs,
+    fontWeight: Typography.weight.bold,
+    letterSpacing: 1.5,
+  },
+  greeting: {
+    color: Colors.textSecondary,
+    fontSize: Typography.size.sm,
+  },
+  insightCard: {
+    borderLeftWidth: 3,
+    padding: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  insightRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    alignItems: 'flex-start',
+  },
+  insightIcon: { fontSize: 18, marginTop: 1 },
+  insightBody: { flex: 1, gap: 2 },
+  insightTitle: {
+    color: Colors.text,
+    fontSize: Typography.size.sm,
+    fontWeight: Typography.weight.semibold,
+  },
+  insightMessage: {
+    color: Colors.textSecondary,
+    fontSize: Typography.size.sm,
+    lineHeight: Typography.size.sm * 1.5,
+  },
+  actionBtn: { marginTop: Spacing.xs },
+  actionBtnText: {
+    fontSize: Typography.size.xs,
+    fontWeight: Typography.weight.semibold,
+  },
+  dismissBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: Spacing.xs,
+    flexShrink: 0,
+  },
+  emptyCard: {
+    padding: Spacing.md,
+  },
+  emptyText: {
+    color: Colors.textTertiary,
+    fontSize: Typography.size.sm,
+    textAlign: 'center',
   },
 });

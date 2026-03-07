@@ -18,7 +18,9 @@
       "Bash(ls *.md)",
       "Bash(npx expo install expo-document-picker --legacy-peer-deps)",
       "Bash(npx expo install expo-document-picker -- --legacy-peer-deps)",
-      "Bash(npm install expo-document-picker --legacy-peer-deps)"
+      "Bash(npm install expo-document-picker --legacy-peer-deps)",
+      "Bash(ls c:/Projects/RepLogger/android/app/src/main/res/mipmap-*/ic_launcher.png)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(''icon:'', d[''expo''].get\\(''icon''\\)\\); print\\(''android adaptive:'', d[''expo''].get\\(''android'',{}\\).get\\(''adaptiveIcon''\\)\\)\")"
     ]
   }
 }

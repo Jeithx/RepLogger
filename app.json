@@ -1,10 +1,10 @@
 {
   "expo": {
     "name": "HRmetrics",
-    "slug": "hrmetrics",
+    "slug": "replogger",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "hrmetrics",
     "splash": {
@@ -18,8 +18,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0F0F0F"
       },
       "package": "com.jeithx.hrmetrics"
     },
@@ -46,6 +46,7 @@
       "eas": {
         "projectId": "d0b135c5-f4dd-44de-9b0f-aa594e2ad569"
       }
-    }
+    },
+    "owner": "jeithx"
   }
 }
