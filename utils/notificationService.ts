@@ -313,11 +313,18 @@ export async function showRestTimerNotification(endTimestamp: number): Promise<v
         await Notifications.dismissNotificationAsync(REST_TIMER_ID).catch(() => { });
         await Notifications.cancelScheduledNotificationAsync(REST_COMPLETE_ID).catch(() => { });
 
+        const remainingSecs = Math.max(0, Math.ceil((endTimestamp - Date.now()) / 1000));
+        const mins = Math.floor(remainingSecs / 60);
+        const secs = remainingSecs % 60;
+        const timeStr = mins > 0
+            ? `${mins}:${secs.toString().padStart(2, '0')}`
+            : `${remainingSecs}s`;
+
         await Notifications.scheduleNotificationAsync({
             identifier: REST_TIMER_ID,
             content: {
                 title: 'Rest Timer',
-                body: 'Resting — tap to return',
+                body: `${timeStr} remaining — tap to return`,
                 sticky: true,
                 ...(Platform.OS === 'android' && {
                     android: {
@@ -335,8 +342,7 @@ export async function showRestTimerNotification(endTimestamp: number): Promise<v
             trigger: null,
         });
 
-        const delaySeconds = Math.ceil((endTimestamp - Date.now()) / 1000);
-        if (delaySeconds > 0) {
+        if (remainingSecs > 0) {
             await Notifications.scheduleNotificationAsync({
                 identifier: REST_COMPLETE_ID,
                 content: {
@@ -349,7 +355,7 @@ export async function showRestTimerNotification(endTimestamp: number): Promise<v
                 },
                 trigger: {
                     type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-                    seconds: delaySeconds,
+                    seconds: remainingSecs,
                 },
             });
         }

@@ -39,6 +39,11 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restEndTimeRef = useRef<number>(0);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  // Refs for always-current values inside the stable AppState listener
+  const visibleRef = useRef(visible);
+  const durationRef = useRef(durationSeconds);
+  visibleRef.current = visible;
+  durationRef.current = durationSeconds;
 
   // Reanimated shared values
   const fadeValue = useSharedValue(0);
@@ -99,13 +104,14 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
     };
   }, [visible, durationSeconds]);
 
-  // Handle app going to background / foreground
+  // Handle app going to background / foreground.
+  // Empty deps — single stable subscription; uses refs so visible/duration are always current.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       const prev = appStateRef.current;
       appStateRef.current = nextState;
 
-      if (!visible) return;
+      if (!visibleRef.current) return;
 
       if (prev === 'active' && nextState !== 'active') {
         // App going to background — show notification
@@ -119,7 +125,7 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
         setRemaining(rem);
 
         if (rem > 0) {
-          const progressDone = 1 - rem / durationSeconds;
+          const progressDone = 1 - rem / durationRef.current;
           dashOffset.value = progressDone * CIRCUMFERENCE;
           dashOffset.value = withTiming(CIRCUMFERENCE, {
             duration: rem * 1000,
@@ -131,7 +137,8 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
     });
 
     return () => subscription.remove();
-  }, [visible, durationSeconds]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!visible) return null;
 
