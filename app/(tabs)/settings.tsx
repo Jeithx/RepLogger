@@ -24,11 +24,11 @@ import { BorderRadius, Colors, Spacing, Typography } from '../../constants/theme
 const WATER_COLOR = '#4FC3F7';
 
 type WeightUnit = 'kg' | 'lbs';
-type RestOption = '60' | '90' | '120' | '180';
+type RestOption = '60' | '90' | '120' | '180' | 'off';
 type WaterUnit = 'ml' | 'oz';
 
-const REST_OPTIONS: RestOption[] = ['60', '90', '120', '180'];
-const REST_LABELS: Record<RestOption, string> = { '60': '60s', '90': '90s', '120': '2m', '180': '3m' };
+const REST_OPTIONS: RestOption[] = ['60', '90', '120', '180', 'off'];
+const REST_LABELS: Record<RestOption, string> = { '60': '60s', '90': '90s', '120': '2m', '180': '3m', off: 'Off' };
 
 function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;

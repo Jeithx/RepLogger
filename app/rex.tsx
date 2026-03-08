@@ -1,6 +1,5 @@
-import { useCallback } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInsightStore } from '../store/useInsightStore';
@@ -44,14 +43,7 @@ function InsightCard({ insight }: { insight: Insight }) {
 
 export default function RexScreen() {
   const insets = useSafeAreaInsets();
-  const { insights, isLoading, lastGeneratedAt, refreshInsights, generateAndLoad } =
-    useInsightStore();
-
-  useFocusEffect(
-    useCallback(() => {
-      generateAndLoad();
-    }, [generateAndLoad])
-  );
+  const { insights, isLoading, lastGeneratedAt } = useInsightStore();
 
   const topInsight = insights[0];
   const mood = moodFromInsight(topInsight?.id);
@@ -162,14 +154,6 @@ export default function RexScreen() {
         </View>
       </View>
 
-      {/* Refresh button */}
-      <Pressable
-        style={({ pressed }) => [styles.refreshBtn, pressed && { opacity: 0.75 }]}
-        onPress={refreshInsights}
-      >
-        <Ionicons name="refresh" size={16} color={Colors.background} />
-        <Text style={styles.refreshBtnText}>Refresh Analysis</Text>
-      </Pressable>
     </ScrollView>
   );
 }
@@ -290,19 +274,4 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weight.semibold,
   },
   divider: { height: 1, backgroundColor: Colors.border, marginHorizontal: Spacing.md },
-  refreshBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.md,
-    marginTop: Spacing.md,
-  },
-  refreshBtnText: {
-    color: Colors.background,
-    fontSize: Typography.size.md,
-    fontWeight: Typography.weight.bold,
-  },
 });

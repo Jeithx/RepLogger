@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { getDatabase } from '../db/database';
-import { getSetting, setSetting } from '../db/settingsQueries';
+import { getSetting } from '../db/settingsQueries';
 import { getWorkoutHistory, getAllPRs } from '../db/historyQueries';
 import { getBodyWeightEntries } from '../db/bodyWeightQueries';
 import { getWaterHistory } from '../db/waterQueries';
@@ -9,7 +9,6 @@ import {
   InsightData,
   WorkoutSetDetail,
   generateInsights,
-  selectDailyInsights,
   DEFAULT_INSIGHT,
 } from '../utils/insightEngine';
 import { WorkoutPhase } from '../types';
@@ -20,8 +19,6 @@ interface InsightStore {
   lastGeneratedAt: string | null;
 
   generateAndLoad: () => void;
-  dismissInsight: (id: string) => void;
-  refreshInsights: () => void;
 }
 
 function queryWorkoutSets(workoutIds: number[]): WorkoutSetDetail[] {
@@ -91,36 +88,7 @@ function getNextRoutineDayName(): string | null {
   }
 }
 
-function getDismissedIds(): string[] {
-  try {
-    const raw = getSetting('rex_dismissed_insights');
-    if (!raw) return [];
-    return JSON.parse(raw) as string[];
-  } catch {
-    return [];
-  }
-}
-
-function getRecentMap(): Record<string, number> {
-  try {
-    const raw = getSetting('rex_recent_insights');
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, number>;
-  } catch {
-    return {};
-  }
-}
-
-function cleanRecentMap(map: Record<string, number>): Record<string, number> {
-  const cutoff = Date.now() - 3 * 86400000;
-  const cleaned: Record<string, number> = {};
-  for (const [id, ts] of Object.entries(map)) {
-    if (ts > cutoff) cleaned[id] = ts;
-  }
-  return cleaned;
-}
-
-export const useInsightStore = create<InsightStore>((set, get) => ({
+export const useInsightStore = create<InsightStore>((set) => ({
   insights: [],
   isLoading: false,
   lastGeneratedAt: null,
@@ -148,10 +116,6 @@ export const useInsightStore = create<InsightStore>((set, get) => ({
       const dailyWaterGoalMl = parseInt(getSetting('daily_water_goal_ml') || '2500', 10);
       const activeRoutineId = getSetting('active_routine_id') || null;
 
-      const dismissedIds = getDismissedIds();
-      const recentMap = cleanRecentMap(getRecentMap());
-      const recentIds = Object.keys(recentMap);
-
       const insightData: InsightData = {
         workouts,
         workoutSets,
@@ -168,39 +132,11 @@ export const useInsightStore = create<InsightStore>((set, get) => ({
       };
 
       const allInsights = generateInsights(insightData);
-      const selected = selectDailyInsights(allInsights, dismissedIds, recentIds);
+      const insights = allInsights.length > 0 ? allInsights : [DEFAULT_INSIGHT];
 
-      // Track recently shown
-      const newRecentMap = { ...recentMap };
-      for (const insight of selected) {
-        if (insight.id !== 'DEFAULT') newRecentMap[insight.id] = Date.now();
-      }
-      setSetting('rex_recent_insights', JSON.stringify(newRecentMap));
-
-      set({ insights: selected, isLoading: false, lastGeneratedAt: new Date().toISOString() });
+      set({ insights, isLoading: false, lastGeneratedAt: new Date().toISOString() });
     } catch {
       set({ insights: [DEFAULT_INSIGHT], isLoading: false });
     }
-  },
-
-  dismissInsight: (id: string) => {
-    // Add to permanent dismissed list
-    const dismissed = getDismissedIds();
-    if (!dismissed.includes(id)) {
-      dismissed.push(id);
-      setSetting('rex_dismissed_insights', JSON.stringify(dismissed));
-    }
-    set((state) => ({ insights: state.insights.filter((i) => i.id !== id) }));
-
-    // If empty after dismiss, regenerate silently
-    if (get().insights.length === 0) {
-      get().generateAndLoad();
-    }
-  },
-
-  refreshInsights: () => {
-    // Clear recent tracking so all eligible insights can show
-    setSetting('rex_recent_insights', '{}');
-    get().generateAndLoad();
   },
 }));

@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, AppState, AppStateStatus, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, AppStateStatus, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedProps,
   withSpring,
+  withTiming,
+  cancelAnimation,
+  Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { BorderRadius, Colors, Spacing, Typography } from '../constants/theme';
 import { showRestTimerNotification, dismissRestTimerNotification } from '../utils/notificationService';
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
 
 const RING_SIZE = 120;
 const RING_STROKE = 6;
@@ -34,13 +38,23 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
   const [remaining, setRemaining] = useState(durationSeconds);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restEndTimeRef = useRef<number>(0);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const dashOffset = useRef(new Animated.Value(0)).current;
-  const slideY = useSharedValue(SCREEN_HEIGHT * 0.5);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  // Reanimated shared values
+  const fadeValue = useSharedValue(0);
+  const slideY = useSharedValue(SCREEN_HEIGHT * 0.5);
+  const dashOffset = useSharedValue(0);
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: fadeValue.value,
+  }));
 
   const cardStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: slideY.value }],
+  }));
+
+  const circleAnimatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: dashOffset.value,
   }));
 
   const startCountdown = (endTime: number) => {
@@ -52,7 +66,7 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
         if (intervalRef.current) clearInterval(intervalRef.current);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
       }
-    }, 500);
+    }, 1000);
   };
 
   useEffect(() => {
@@ -61,31 +75,22 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
       restEndTimeRef.current = endTime;
       setRemaining(durationSeconds);
 
-      // Animate ring from full to empty
-      dashOffset.setValue(0);
-      Animated.timing(dashOffset, {
-        toValue: CIRCUMFERENCE,
+      // Animate ring from full to empty using Reanimated
+      dashOffset.value = 0;
+      dashOffset.value = withTiming(CIRCUMFERENCE, {
         duration: durationSeconds * 1000,
-        useNativeDriver: false,
-      }).start();
+        easing: Easing.linear,
+      });
 
       slideY.value = withSpring(0, { damping: 22, stiffness: 180 });
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
+      fadeValue.value = withTiming(1, { duration: 200 });
 
       startCountdown(endTime);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      dashOffset.stopAnimation();
+      cancelAnimation(dashOffset);
       slideY.value = SCREEN_HEIGHT * 0.5;
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }).start();
+      fadeValue.value = withTiming(0, { duration: 150 });
       dismissRestTimerNotification().catch(() => { });
     }
 
@@ -105,7 +110,7 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
       if (prev === 'active' && nextState !== 'active') {
         // App going to background — show notification
         if (intervalRef.current) clearInterval(intervalRef.current);
-        dashOffset.stopAnimation();
+        cancelAnimation(dashOffset);
         showRestTimerNotification(restEndTimeRef.current).catch(() => { });
       } else if (prev !== 'active' && nextState === 'active') {
         // App returning to foreground — resume
@@ -114,14 +119,12 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
         setRemaining(rem);
 
         if (rem > 0) {
-          // Restart ring animation from current remaining
           const progressDone = 1 - rem / durationSeconds;
-          dashOffset.setValue(progressDone * CIRCUMFERENCE);
-          Animated.timing(dashOffset, {
-            toValue: CIRCUMFERENCE,
+          dashOffset.value = progressDone * CIRCUMFERENCE;
+          dashOffset.value = withTiming(CIRCUMFERENCE, {
             duration: rem * 1000,
-            useNativeDriver: false,
-          }).start();
+            easing: Easing.linear,
+          });
           startCountdown(restEndTimeRef.current);
         }
       }
@@ -136,7 +139,7 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
     remaining === 0 ? Colors.success : remaining <= 10 ? Colors.error : Colors.primary;
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Reanimated.View style={[styles.overlay, overlayStyle]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
       <Reanimated.View style={[styles.card, cardStyle]}>
         <Text style={styles.label}>Rest</Text>
@@ -161,7 +164,7 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
               strokeWidth={RING_STROKE}
               fill="none"
               strokeDasharray={CIRCUMFERENCE}
-              strokeDashoffset={dashOffset}
+              animatedProps={circleAnimatedProps}
               strokeLinecap="round"
               rotation="-90"
               origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
@@ -188,7 +191,7 @@ export default function RestTimer({ visible, durationSeconds = 90, onDismiss }: 
           <Text style={styles.skipText}>Skip</Text>
         </Pressable>
       </Reanimated.View>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 

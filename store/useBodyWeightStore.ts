@@ -8,6 +8,7 @@ import {
   getMovingAverage,
 } from '../db/bodyWeightQueries';
 import { setPhase as setPhaseDB, getPhaseInfo } from '../db/settingsQueries';
+import { useInsightStore } from './useInsightStore';
 
 const PAGE_SIZE = 30;
 
@@ -41,6 +42,7 @@ export const useBodyWeightStore = create<BodyWeightStore>((set, get) => ({
       const fresh = getBodyWeightEntries(PAGE_SIZE, 0);
       set({ entries: fresh, hasMore: fresh.length === PAGE_SIZE, stats: getBodyWeightStats() });
       get().loadMovingAverage(7);
+      useInsightStore.getState().generateAndLoad();
     } catch (error) {
       console.error('logWeight failed:', error);
     }

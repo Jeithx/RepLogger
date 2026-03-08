@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -251,28 +251,22 @@ function getRexGreeting(): string {
   return 'Late night? Here\'s a quick recap.';
 }
 
-function RexInsightCard({ insight }: { insight: Insight }) {
+function RexInsightCard({ insight, onTap }: { insight: Insight; onTap: () => void }) {
   const accent = CATEGORY_COLOR[insight.category] ?? Colors.primary;
   return (
-    <View style={[rexStyles.insightCard, { borderLeftColor: accent }]}>
+    <Pressable
+      style={[rexStyles.insightCard, { borderLeftColor: accent }]}
+      onPress={onTap}
+    >
       <View style={rexStyles.insightRow}>
         <Text style={rexStyles.insightIcon}>{insight.icon}</Text>
         <View style={rexStyles.insightBody}>
           <Text style={rexStyles.insightTitle}>{insight.title}</Text>
-          <Text style={rexStyles.insightMessage}>{insight.message}</Text>
-          {insight.actionLabel && insight.actionRoute && (
-            <Pressable
-              onPress={() => router.push(insight.actionRoute as never)}
-              style={rexStyles.actionBtn}
-            >
-              <Text style={[rexStyles.actionBtnText, { color: accent }]}>
-                {insight.actionLabel} →
-              </Text>
-            </Pressable>
-          )}
+          <Text style={rexStyles.insightMessage} numberOfLines={2}>{insight.message}</Text>
         </View>
+        <Ionicons name="chevron-forward" size={14} color={Colors.textTertiary} />
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -281,23 +275,7 @@ interface RexSectionProps {
 }
 
 function RexSection({ onRexTap }: RexSectionProps) {
-  const { insights, isLoading, generateAndLoad } = useInsightStore();
-  const prevLength = useRef(insights.length);
-  const [bounceRex, setBounceRex] = useState(false);
-
-  useFocusEffect(
-    useCallback(() => {
-      generateAndLoad();
-    }, [generateAndLoad])
-  );
-
-  useEffect(() => {
-    if (insights.length > 0 && prevLength.current === 0) {
-      setBounceRex(true);
-      setTimeout(() => setBounceRex(false), 600);
-    }
-    prevLength.current = insights.length;
-  }, [insights.length]);
+  const { insights, isLoading } = useInsightStore();
 
   const topInsight = insights[0];
   const mood = moodFromInsight(topInsight?.id);
@@ -307,7 +285,7 @@ function RexSection({ onRexTap }: RexSectionProps) {
     <View style={rexStyles.container}>
       {/* Header row: REX face + greeting */}
       <Pressable style={rexStyles.header} onPress={onRexTap}>
-        <RexMascot mood={mood} size={56} animated onBounce={bounceRex} />
+        <RexMascot mood={mood} size={56} animated />
         <View style={rexStyles.greetingBox}>
           <Text style={rexStyles.rexLabel}>REX</Text>
           <Text style={rexStyles.greeting}>{greeting}</Text>
@@ -315,24 +293,19 @@ function RexSection({ onRexTap }: RexSectionProps) {
         <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
       </Pressable>
 
-      {/* Insight cards */}
+      {/* Single top insight — tap to see all on /rex */}
       {isLoading ? (
         <View style={rexStyles.emptyCard}>
           <Text style={rexStyles.emptyText}>Analyzing...</Text>
         </View>
-      ) : insights.length === 0 ? (
-        <View style={rexStyles.emptyCard}>
+      ) : !topInsight ? (
+        <Pressable style={rexStyles.emptyCard} onPress={onRexTap}>
           <Text style={rexStyles.emptyText}>
-            All good. Nothing to report today. Just show up.
+            All good. Nothing to report. Just show up.
           </Text>
-        </View>
+        </Pressable>
       ) : (
-        insights.map((insight) => (
-          <RexInsightCard
-            key={insight.id}
-            insight={insight}
-          />
-        ))
+        <RexInsightCard insight={topInsight} onTap={onRexTap} />
       )}
     </View>
   );

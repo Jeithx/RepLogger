@@ -170,6 +170,11 @@ const ExerciseBlock = memo(function ExerciseBlock({
   const { toggleSetComplete, addSet, removeSet, removeExercise } = useWorkoutStore();
   const [lastPerf, setLastPerf] = useState<LastPerformanceSet[]>([]);
   const [muscleGroup, setMuscleGroup] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const prevAllCompleted = useRef(false);
+
+  const allCompleted =
+    exercise.sets.length > 0 && exercise.sets.every((s) => s.completed);
 
   useEffect(() => {
     setLastPerf(getLastPerformance(exercise.exerciseId));
@@ -180,6 +185,18 @@ const ExerciseBlock = memo(function ExerciseBlock({
     );
     setMuscleGroup(result?.muscle_group ?? null);
   }, [exercise.exerciseId]);
+
+  // Auto-collapse when all sets are done
+  useEffect(() => {
+    if (allCompleted && !prevAllCompleted.current) {
+      const t = setTimeout(() => setCollapsed(true), 600);
+      return () => clearTimeout(t);
+    }
+    if (!allCompleted) {
+      setCollapsed(false);
+    }
+    prevAllCompleted.current = allCompleted;
+  }, [allCompleted]);
 
   const handleToggle = useCallback(
     (setNumber: number, wasCompleted: boolean) => {
@@ -197,68 +214,99 @@ const ExerciseBlock = memo(function ExerciseBlock({
       ? `Last: ${lastPerf.map((s) => `${kgToDisplay(s.weight_kg, unit)}${unit}×${s.reps}`).join(', ')}`
       : null;
 
+  const completedCount = exercise.sets.filter((s) => s.completed).length;
+
   return (
-    <View style={[styles.exerciseBlock, isActive && styles.exerciseBlockActive]}>
+    <View style={[
+      styles.exerciseBlock,
+      isActive && styles.exerciseBlockActive,
+      allCompleted && styles.exerciseBlockCompleted,
+    ]}>
       <Pressable
         onLongPress={drag}
         delayLongPress={200}
+        onPress={allCompleted ? () => setCollapsed((c) => !c) : undefined}
         style={styles.exerciseHeader}
       >
         <Ionicons name="reorder-three-outline" size={20} color={Colors.textTertiary} style={styles.dragHandle} />
         <View style={styles.exerciseNameRow}>
           <Text style={styles.exerciseName} numberOfLines={1}>{exercise.exerciseName}</Text>
-          {muscleGroup && (
+          {allCompleted ? (
+            <View style={styles.completedBadge}>
+              <Ionicons name="checkmark" size={10} color={Colors.background} />
+              <Text style={styles.completedBadgeText}>Done</Text>
+            </View>
+          ) : muscleGroup ? (
             <View style={styles.muscleBadge}>
               <Text style={styles.muscleBadgeText}>{muscleGroup}</Text>
             </View>
-          )}
+          ) : null}
         </View>
-        <Pressable
-          onPress={() => removeExercise(exercise.exerciseId)}
-          hitSlop={8}
-        >
-          <Ionicons name="trash-outline" size={18} color={Colors.textTertiary} />
-        </Pressable>
+        {allCompleted ? (
+          <Ionicons
+            name={collapsed ? 'chevron-down' : 'chevron-up'}
+            size={16}
+            color={Colors.textTertiary}
+          />
+        ) : (
+          <Pressable onPress={() => removeExercise(exercise.exerciseId)} hitSlop={8}>
+            <Ionicons name="trash-outline" size={18} color={Colors.textTertiary} />
+          </Pressable>
+        )}
       </Pressable>
 
-      {lastPerfText && (
-        <Text style={styles.lastPerf}>{lastPerfText}</Text>
+      {!collapsed && (
+        <>
+          {lastPerfText && (
+            <Text style={styles.lastPerf}>{lastPerfText}</Text>
+          )}
+
+          <View style={styles.setHeader}>
+            <Text style={styles.setHeaderText}>SET</Text>
+            <Text style={[styles.setHeaderText, styles.setHeaderCenter]}>{unit.toUpperCase()}</Text>
+            <Text style={[styles.setHeaderText, styles.setHeaderCenter]}>REPS</Text>
+            <View style={{ width: 36 }} />
+            <View style={{ width: 24 }} />
+          </View>
+
+          {exercise.sets.map((s) => {
+            const lp = lastPerf.find((l) => l.set_number === s.setNumber);
+            const weightPlaceholder = lp ? String(kgToDisplay(lp.weight_kg, unit)) : unit;
+            return (
+              <SetRow
+                key={s.setNumber}
+                exerciseId={exercise.exerciseId}
+                set={s}
+                unit={unit}
+                weightPlaceholder={weightPlaceholder}
+                onToggle={() => handleToggle(s.setNumber, s.completed)}
+                onDelete={() => {
+                  if (exercise.sets.length <= 1) return;
+                  removeSet(exercise.exerciseId, s.setNumber);
+                }}
+              />
+            );
+          })}
+
+          {!allCompleted && (
+            <Pressable
+              style={({ pressed }) => [styles.addSetBtn, pressed && styles.addSetBtnPressed]}
+              onPress={() => addSet(exercise.exerciseId)}
+            >
+              <Ionicons name="add" size={16} color={Colors.primary} />
+              <Text style={styles.addSetText}>Add Set</Text>
+            </Pressable>
+          )}
+        </>
       )}
 
-      <View style={styles.setHeader}>
-        <Text style={styles.setHeaderText}>SET</Text>
-        <Text style={[styles.setHeaderText, styles.setHeaderCenter]}>{unit.toUpperCase()}</Text>
-        <Text style={[styles.setHeaderText, styles.setHeaderCenter]}>REPS</Text>
-        <View style={{ width: 36 }} />
-        <View style={{ width: 24 }} />
-      </View>
-
-      {exercise.sets.map((s) => {
-        const lp = lastPerf.find((l) => l.set_number === s.setNumber);
-        const weightPlaceholder = lp ? String(kgToDisplay(lp.weight_kg, unit)) : unit;
-        return (
-          <SetRow
-            key={s.setNumber}
-            exerciseId={exercise.exerciseId}
-            set={s}
-            unit={unit}
-            weightPlaceholder={weightPlaceholder}
-            onToggle={() => handleToggle(s.setNumber, s.completed)}
-            onDelete={() => {
-              if (exercise.sets.length <= 1) return;
-              removeSet(exercise.exerciseId, s.setNumber);
-            }}
-          />
-        );
-      })}
-
-      <Pressable
-        style={({ pressed }) => [styles.addSetBtn, pressed && styles.addSetBtnPressed]}
-        onPress={() => addSet(exercise.exerciseId)}
-      >
-        <Ionicons name="add" size={16} color={Colors.primary} />
-        <Text style={styles.addSetText}>Add Set</Text>
-      </Pressable>
+      {collapsed && (
+        <View style={styles.collapsedSummary}>
+          <Text style={styles.collapsedSummaryText}>
+            {completedCount} set{completedCount !== 1 ? 's' : ''} completed · Tap to expand
+          </Text>
+        </View>
+      )}
     </View>
   );
 });
@@ -313,6 +361,7 @@ export default function ActiveWorkoutScreen() {
   const [discardVisible, setDiscardVisible] = useState(false);
   const [unit, setUnit] = useState<WeightUnit>('kg');
   const [restSeconds, setRestSeconds] = useState(90);
+  const [restEnabled, setRestEnabled] = useState(true);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const insets = useSafeAreaInsets();
 
@@ -320,7 +369,12 @@ export default function ActiveWorkoutScreen() {
     const savedUnit = getSetting('weight_unit');
     const savedRest = getSetting('rest_timer_seconds');
     setUnit(savedUnit === 'lbs' ? 'lbs' : 'kg');
-    setRestSeconds(savedRest ? parseInt(savedRest, 10) : 90);
+    if (savedRest === 'off') {
+      setRestEnabled(false);
+    } else {
+      setRestEnabled(true);
+      setRestSeconds(savedRest ? parseInt(savedRest, 10) : 90);
+    }
   }, []);
 
   // Show persistent notification when app is backgrounded during a workout
@@ -379,11 +433,11 @@ export default function ActiveWorkoutScreen() {
           unit={unit}
           drag={drag}
           isActive={isActive}
-          onSetCompleted={() => setRestTimerVisible(true)}
+          onSetCompleted={() => { if (restEnabled) setRestTimerVisible(true); }}
         />
       </ScaleDecorator>
     ),
-    [unit]
+    [unit, restEnabled]
   );
 
   if (!activeWorkout) return null;
@@ -553,6 +607,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+  },
+  exerciseBlockCompleted: {
+    borderColor: Colors.success,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: Colors.success,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
+    flexShrink: 0,
+  },
+  completedBadgeText: {
+    color: Colors.background,
+    fontSize: Typography.size.xs,
+    fontWeight: Typography.weight.bold,
+  },
+  collapsedSummary: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  collapsedSummaryText: {
+    color: Colors.textTertiary,
+    fontSize: Typography.size.xs,
   },
   exerciseHeader: {
     flexDirection: 'row',
