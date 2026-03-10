@@ -36,7 +36,14 @@
       "Bash(grep -r \"from ''expo-\" --include=\"*.ts\" --include=\"*.tsx\" -h .)",
       "Bash(grep -r \"from ''expo-\" app/ components/ store/ utils/ db/ widgets/ --include=\"*.ts\" --include=\"*.tsx\" -h)",
       "Bash(npm install expo-linking expo-constants @expo/metro-runtime --legacy-peer-deps)",
-      "Bash(grep -A 10 '\"\"peerDependencies\"\"')"
+      "Bash(grep -A 10 '\"\"peerDependencies\"\"')",
+      "Bash(ping -n 3 google.com)",
+      "Bash(xargs grep -l \"WidgetPreview\")",
+      "Bash(tail -30 \"app/\\(tabs\\)/settings.tsx\")",
+      "Bash(head -20 \"app/\\(tabs\\)/settings.tsx\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''jest:'', d.get\\(''jest'',{}\\)\\); print\\(''scripts:'', {k:v for k,v in d.get\\(''scripts'',{}\\).items\\(\\) if ''test'' in k.lower\\(\\)}\\)\")",
+      "Bash(npm install --save-dev jest ts-jest @types/jest --legacy-peer-deps)",
+      "Bash(npx jest --no-coverage)"
     ]
   }
 }

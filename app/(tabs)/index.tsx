@@ -24,7 +24,7 @@ import { kgToDisplay, formatVolume, WeightUnit } from '../../utils/weightUtils';
 import { formatWater } from '../../utils/waterUtils';
 import { BodyWeightEntry, Workout, RoutineDayWithExercises } from '../../types';
 import { BorderRadius, Colors, Spacing, Typography } from '../../constants/theme';
-import RexMascot, { moodFromInsight } from '../../components/RexMascot';
+import RexMascot from '../../components/RexMascot';
 import type { Insight } from '../../utils/insightEngine';
 
 const CATEGORY_COLOR: Record<string, string> = {
@@ -275,10 +275,9 @@ interface RexSectionProps {
 }
 
 function RexSection({ onRexTap }: RexSectionProps) {
-  const { insights, isLoading } = useInsightStore();
+  const { topInsight, dailyMood, isLoading } = useInsightStore();
 
-  const topInsight = insights[0];
-  const mood = moodFromInsight(topInsight?.id);
+  const mood = dailyMood;
   const greeting = getRexGreeting();
 
   return (
@@ -298,12 +297,6 @@ function RexSection({ onRexTap }: RexSectionProps) {
         <View style={rexStyles.emptyCard}>
           <Text style={rexStyles.emptyText}>Analyzing...</Text>
         </View>
-      ) : !topInsight ? (
-        <Pressable style={rexStyles.emptyCard} onPress={onRexTap}>
-          <Text style={rexStyles.emptyText}>
-            All good. Nothing to report. Just show up.
-          </Text>
-        </Pressable>
       ) : (
         <RexInsightCard insight={topInsight} onTap={onRexTap} />
       )}

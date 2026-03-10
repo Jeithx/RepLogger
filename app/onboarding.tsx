@@ -11,8 +11,7 @@ import { router } from 'expo-router';
 import { setSetting } from '../db/settingsQueries';
 import { BorderRadius, Colors, Spacing, Typography } from '../constants/theme';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARDS = [
   {
     emoji: '🏋️',
@@ -45,6 +44,11 @@ export default function OnboardingScreen() {
     setIndex(i);
   };
 
+  const handleScroll = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
+    const newIndex = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+    if (newIndex !== index) setIndex(newIndex);
+  };
+
   const handleNext = () => {
     if (index < CARDS.length - 1) {
       goTo(index + 1);
@@ -55,19 +59,20 @@ export default function OnboardingScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Skip button */}
-      <View style={styles.topBar}>
-        {index < CARDS.length - 1 ? (
+  {/* Skip button */}
+        <View style={styles.topBar}>
           <Pressable
-            style={({ pressed }) => [styles.skipBtn, pressed && styles.skipBtnPressed]}
+            style={({ pressed }) => [
+              styles.skipBtn,
+              pressed && styles.skipBtnPressed,
+              index === CARDS.length - 1 && { opacity: 0 } // Son sayfada görünmez yap
+            ]}
             onPress={complete}
+            disabled={index === CARDS.length - 1} // Son sayfada tıklanmasını engelle
           >
             <Text style={styles.skipText}>Skip</Text>
           </Pressable>
-        ) : (
-          <View style={styles.skipBtn} />
-        )}
-      </View>
+        </View>
 
       {/* Cards */}
       <ScrollView
@@ -75,12 +80,14 @@ export default function OnboardingScreen() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        scrollEnabled={false}
+        onMomentumScrollEnd={handleScroll}
         style={styles.scroll}
       >
         {CARDS.map((card, i) => (
           <View key={i} style={styles.card}>
-            <Text style={styles.emoji}>{card.emoji}</Text>
+            <View style={styles.emojiWrap}>
+              <Text style={styles.emoji}>{card.emoji}</Text>
+            </View>
             <Text style={styles.title}>{card.title}</Text>
             <Text style={styles.subtitle}>{card.subtitle}</Text>
           </View>
@@ -138,17 +145,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   card: {
-    width: SCREEN_W,
-    flex: 1,
+      width: SCREEN_W,
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'flex-start', // Öğelerin dikeyde ortalanmak yerine yukarıdan aşağı dizilmesini sağlar
+      paddingHorizontal: Spacing.xxxl,
+      paddingTop: SCREEN_H * 0.22, // Ekran yüksekliğinin %22'si kadar sabit bir üst boşluk bırakır
+      gap: Spacing.lg,
+    },
+  emojiWrap: {
+    width: 120,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.xxxl,
-    gap: Spacing.lg,
-    paddingBottom: Spacing.xxxl,
+    overflow: 'hidden',
   },
   emoji: {
     fontSize: 80,
-    marginBottom: Spacing.lg,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   title: {
     color: Colors.text,

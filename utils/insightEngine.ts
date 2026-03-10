@@ -40,6 +40,10 @@ export interface Insight {
   generatedAt: string;
 }
 
+// ─── Daily mood ───────────────────────────────────────────────────────────────
+
+export type DailyMood = 'happy' | 'thinking' | 'excited' | 'neutral';
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function pick<T>(arr: T[]): T {
@@ -154,6 +158,7 @@ function checkPlateauDetected(data: InsightData): Insight | null {
         `You've hit a wall on ${name}. Happens to everyone. Try adding 1 extra set next time.`,
         `${name} plateau detected. Your body adapted — time to shake things up.`,
         `3 sessions, same weight on ${name}. Your muscles are bored. Let's fix that.`,
+        `${name} hasn't moved in 3 sessions. Have you tried changing the rep range?`,
       ]),
       actionLabel: 'View History',
       actionRoute: '/(tabs)/history',
@@ -272,6 +277,7 @@ function checkMissedDays(data: InsightData): Insight | null {
     message: pick([
       `It's been ${daysSince} days since your last session. Your weights miss you.`,
       `${daysSince} days off. Rest is good, but ${data.nextRoutineDayName ?? 'your next workout'} is waiting.`,
+      `${daysSince} days since your last session. What's getting in the way?`,
     ]),
     actionLabel: 'Start Workout',
     actionRoute: '/(tabs)',
@@ -309,6 +315,7 @@ function checkMuscleImbalance(data: InsightData): Insight | null {
     message: pick([
       `You've been hammering ${dominant}. ${neglected} is feeling left out.`,
       `Balanced training = better results. ${neglected} could use some love.`,
+      `When did you last program ${neglected} training specifically?`,
     ]),
     generatedAt: new Date().toISOString(),
   };
@@ -725,13 +732,43 @@ export function generateInsights(data: InsightData): Insight[] {
   return results;
 }
 
-const DEFAULT_INSIGHT: Insight = {
-  id: 'DEFAULT',
-  category: 'workout',
-  priority: 3,
-  icon: '💪',
-  title: 'Keep Going',
-  message: 'Everything looks good. Show up today and keep the streak going.',
+// ─── Default insights (rotate daily) ─────────────────────────────────────────
+
+const DEFAULT_POOL: Omit<Insight, 'generatedAt'>[] = [
+  {
+    id: 'DEFAULT',
+    category: 'workout',
+    priority: 3,
+    icon: '💪',
+    title: 'Keep Going',
+    message: 'Everything looks good. Show up today and keep the streak going.',
+  },
+  {
+    id: 'DEFAULT',
+    category: 'workout',
+    priority: 3,
+    icon: '🤔',
+    title: 'One Goal Today',
+    message: "What's one lift you want to improve this week? Make that your focus.",
+  },
+  {
+    id: 'DEFAULT',
+    category: 'workout',
+    priority: 3,
+    icon: '🌅',
+    title: 'Progress Takes Time',
+    message: "Look back at where you started. Every session compounds — you're building something real.",
+  },
+];
+
+export function getDailyDefault(): Insight {
+  const dayIndex = Math.floor(Date.now() / 86400000) % DEFAULT_POOL.length;
+  return { ...DEFAULT_POOL[dayIndex], generatedAt: new Date().toISOString() };
+}
+
+// Static export for backward compatibility
+export const DEFAULT_INSIGHT: Insight = {
+  ...DEFAULT_POOL[0],
   generatedAt: new Date().toISOString(),
 };
 
@@ -740,12 +777,13 @@ export function selectDailyInsights(
   dismissedIds: string[],
   recentIds: string[]
 ): Insight[] {
-  if (allInsights.length === 0) return [DEFAULT_INSIGHT];
+  const fallback = getDailyDefault();
+  if (allInsights.length === 0) return [fallback];
 
   const filtered = allInsights.filter(
     (i) => !dismissedIds.includes(i.id) && !recentIds.includes(i.id)
   );
-  if (filtered.length === 0) return [DEFAULT_INSIGHT];
+  if (filtered.length === 0) return [fallback];
 
   const p1 = filtered.filter((i) => i.priority === 1);
   const p2 = filtered.filter((i) => i.priority === 2);
@@ -760,7 +798,64 @@ export function selectDailyInsights(
     selected.push(f);
   }
 
-  return selected.length > 0 ? selected : [DEFAULT_INSIGHT];
+  return selected.length > 0 ? selected : [fallback];
 }
 
-export { DEFAULT_INSIGHT };
+// ─── Daily mood computation ───────────────────────────────────────────────────
+
+export function computeDailyMood(data: InsightData): DailyMood {
+  const now = Date.now();
+
+  // Recent PR in last 24h → excited
+  const recentPR = data.personalRecords.find(
+    (pr) => parseDateMs(pr.achieved_at) >= now - 24 * 3600000
+  );
+  if (recentPR) return 'excited';
+
+  // Milestone workout count → excited
+  const milestones = [1, 10, 25, 50, 100, 200];
+  if (milestones.includes(data.totalWorkoutCount)) return 'excited';
+
+  // Goal weight reached → excited
+  if (
+    data.phaseGoalWeight &&
+    data.bodyWeightEntries.length > 0 &&
+    Math.abs(data.bodyWeightEntries[0].weight_kg - data.phaseGoalWeight) <= 0.5
+  ) return 'excited';
+
+  // Too many missed days → thinking
+  if (data.activeRoutineId && data.workouts.length > 0) {
+    const daysSince = Math.floor((now - parseDateMs(data.workouts[0].startedAt)) / 86400000);
+    if (daysSince >= 4) return 'thinking';
+  }
+
+  // Great hydration week → happy
+  if (data.waterEntries.length >= 7) {
+    const last7 = [...data.waterEntries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
+    const daysHit = last7.filter((d) => d.totalMl >= data.dailyWaterGoalMl).length;
+    if (daysHit >= 5) return 'happy';
+  }
+
+  // Consistency streak (4+ weeks) → happy
+  if (data.workouts.length >= 4) {
+    let streak = 0;
+    for (let i = 0; i < 4; i++) {
+      const weekStart = getWeekStartStr(now - i * 7 * 86400000);
+      const nextWeekStart =
+        i === 0
+          ? new Date(now).toISOString().slice(0, 10)
+          : getWeekStartStr(now - (i - 1) * 7 * 86400000);
+      const has = data.workouts.some(
+        (w) => w.startedAt.slice(0, 10) >= weekStart && w.startedAt.slice(0, 10) < nextWeekStart
+      );
+      if (has) streak++;
+      else break;
+    }
+    if (streak >= 4) return 'happy';
+  }
+
+  // Default: rotate daily so mood is consistent within the same day
+  const dayOfYear = Math.floor(now / 86400000);
+  const defaults: DailyMood[] = ['neutral', 'happy', 'neutral', 'thinking'];
+  return defaults[dayOfYear % defaults.length];
+}

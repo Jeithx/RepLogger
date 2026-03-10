@@ -1,12 +1,13 @@
 {
   "name": "hrmetrics",
   "version": "1.0.0",
-  "main": "expo-router/entry",
+  "main": "./index",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "jest"
   },
   "dependencies": {
     "@expo/metro-runtime": "^55.0.6",
@@ -40,7 +41,10 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.2.2",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.6",
     "typescript": "~5.9.2"
   },
   "private": true

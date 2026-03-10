@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { getDatabase } from '../db/database';
-import { getSetting } from '../db/settingsQueries';
+import { getSetting, setSetting } from '../db/settingsQueries';
 import { getWorkoutHistory, getAllPRs } from '../db/historyQueries';
 import { getBodyWeightEntries } from '../db/bodyWeightQueries';
 import { getWaterHistory } from '../db/waterQueries';
@@ -8,13 +8,18 @@ import {
   Insight,
   InsightData,
   WorkoutSetDetail,
+  DailyMood,
   generateInsights,
-  DEFAULT_INSIGHT,
+  selectDailyInsights,
+  getDailyDefault,
+  computeDailyMood,
 } from '../utils/insightEngine';
 import { WorkoutPhase } from '../types';
 
 interface InsightStore {
   insights: Insight[];
+  topInsight: Insight;
+  dailyMood: DailyMood;
   isLoading: boolean;
   lastGeneratedAt: string | null;
 
@@ -88,8 +93,12 @@ function getNextRoutineDayName(): string | null {
   }
 }
 
+const INITIAL_DEFAULT = getDailyDefault();
+
 export const useInsightStore = create<InsightStore>((set) => ({
   insights: [],
+  topInsight: INITIAL_DEFAULT,
+  dailyMood: 'neutral',
   isLoading: false,
   lastGeneratedAt: null,
 
@@ -132,11 +141,27 @@ export const useInsightStore = create<InsightStore>((set) => ({
       };
 
       const allInsights = generateInsights(insightData);
-      const insights = allInsights.length > 0 ? allInsights : [DEFAULT_INSIGHT];
 
-      set({ insights, isLoading: false, lastGeneratedAt: new Date().toISOString() });
+      // Read memory: last 3 shown insight IDs to avoid repeating them
+      const shownIdsStr = getSetting('rex_shown_ids') || '';
+      const recentIds = shownIdsStr ? shownIdsStr.split(',').filter(Boolean) : [];
+
+      const selectedInsights = selectDailyInsights(allInsights, [], recentIds);
+      const topInsight = selectedInsights[0] ?? getDailyDefault();
+
+      // Persist new shown ID (skip DEFAULT which rotates by day anyway)
+      if (topInsight.id !== 'DEFAULT') {
+        const newRecentIds = [topInsight.id, ...recentIds.filter((id) => id !== topInsight.id)].slice(0, 3);
+        setSetting('rex_shown_ids', newRecentIds.join(','));
+      }
+
+      const insights = allInsights.length > 0 ? allInsights : [getDailyDefault()];
+      const dailyMood = computeDailyMood(insightData);
+
+      set({ insights, topInsight, dailyMood, isLoading: false, lastGeneratedAt: new Date().toISOString() });
     } catch {
-      set({ insights: [DEFAULT_INSIGHT], isLoading: false });
+      const fallback = getDailyDefault();
+      set({ insights: [fallback], topInsight: fallback, dailyMood: 'neutral', isLoading: false });
     }
   },
 }));

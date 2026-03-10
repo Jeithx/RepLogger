@@ -1,6 +1,5 @@
 /**
- * RexWideWidget — 4×2 home screen widget
- * Shows REX panel + insight title + message + stats strip.
+ * RexWideWidget — 4×1 home screen widget
  */
 import React from 'react';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
@@ -8,9 +7,8 @@ import type { ColorProp } from 'react-native-android-widget/lib/typescript/widge
 import type { WidgetData } from './RexSmallWidget';
 
 export interface WideWidgetData extends WidgetData {
-  insightMessage: string;
   weekVolumeKg: number;
-  waterPct: number; // 0-100
+  waterPct: number;
 }
 
 const CATEGORY_COLOR: Record<string, ColorProp> = {
@@ -23,10 +21,24 @@ const CATEGORY_COLOR: Record<string, ColorProp> = {
 
 const DEFAULT_ACCENT: ColorProp = '#C8FF00';
 
+function StatCol({ value, label, period, accent }: {
+  value: string; label: string; period: string; accent?: ColorProp;
+}) {
+  return (
+    <FlexWidget style={{ flexDirection: 'column', alignItems: 'center', flexGap: 2 }}>
+      <TextWidget
+        text={value}
+        style={{ color: accent ?? '#CCCCCC', fontSize: 15, fontWeight: 'bold' }}
+      />
+      <TextWidget text={label} style={{ color: '#888888', fontSize: 8 }} />
+      <TextWidget text={period} style={{ color: '#555555', fontSize: 8 }} />
+    </FlexWidget>
+  );
+}
+
 export function RexWideWidget({
   insightIcon,
   insightTitle,
-  insightMessage,
   insightCategory,
   weekCount,
   weekVolumeKg,
@@ -44,124 +56,43 @@ export function RexWideWidget({
         height: 'match_parent',
         width: 'match_parent',
         flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: '#1A1A1A',
         borderRadius: 20,
         overflow: 'hidden',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
       }}
     >
-      {/* Left panel — REX face */}
-      <FlexWidget
-        style={{
-          width: 76,
-          backgroundColor: '#242424',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexGap: 4,
-          padding: 8,
-        }}
-      >
-        {/* Robot head */}
-        <FlexWidget
-          style={{
-            flexDirection: 'column',
-            alignItems: 'center',
-            flexGap: 2,
-          }}
-        >
-          {/* Head box */}
-          <FlexWidget
-            style={{
-              width: 42,
-              backgroundColor: '#C8FF00',
-              borderRadius: 8,
-              padding: 4,
-              flexDirection: 'column',
-              alignItems: 'center',
-              flexGap: 4,
-            }}
-          >
-            {/* Eyes row */}
-            <FlexWidget style={{ flexDirection: 'row', flexGap: 6 }}>
-              <FlexWidget style={{ width: 10, height: 10, backgroundColor: '#0F0F0F', borderRadius: 2 }} />
-              <FlexWidget style={{ width: 10, height: 10, backgroundColor: '#0F0F0F', borderRadius: 2 }} />
-            </FlexWidget>
-            {/* Mouth */}
-            <FlexWidget style={{ width: 22, height: 4, backgroundColor: '#0F0F0F', borderRadius: 2 }} />
-          </FlexWidget>
-          {/* Neck */}
-          <FlexWidget style={{ width: 14, height: 4, backgroundColor: '#C8FF00', borderRadius: 1 }} />
-          {/* Body */}
-          <FlexWidget style={{ width: 36, height: 10, backgroundColor: '#888888', borderRadius: 4 }} />
-        </FlexWidget>
+      {/* REX label */}
+      <TextWidget
+        text="REX"
+        style={{ color: '#C8FF00', fontSize: 13, fontWeight: 'bold' }}
+      />
 
+      {/* Divider */}
+      <FlexWidget style={{ width: 1, height: 36, backgroundColor: '#2A2A2A', marginHorizontal: 14 }} />
+
+      {/* Insight */}
+      <FlexWidget
+        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexGap: 6, overflow: 'hidden' }}
+      >
+        <TextWidget text={insightIcon} style={{ fontSize: 15 }} />
         <TextWidget
-          text="REX"
-          style={{ color: '#C8FF00', fontSize: 9, fontWeight: 'bold' }}
+          text={insightTitle}
+          style={{ color: accent, fontSize: 12, fontWeight: 'bold' }}
+          maxLines={2}
         />
       </FlexWidget>
 
-      {/* Right panel — content */}
-      <FlexWidget
-        style={{
-          flex: 1,
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: 14,
-        }}
-      >
-        {/* Insight */}
-        <FlexWidget style={{ flexDirection: 'column', flexGap: 4 }}>
-          <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', flexGap: 6 }}>
-            <TextWidget text={insightIcon} style={{ fontSize: 14 }} />
-            <TextWidget
-              text={insightTitle}
-              style={{ color: accent, fontSize: 13, fontWeight: 'bold' }}
-              maxLines={1}
-            />
-          </FlexWidget>
-          <TextWidget
-            text={insightMessage}
-            style={{ color: '#888888', fontSize: 11 }}
-            maxLines={2}
-          />
-        </FlexWidget>
+      {/* Divider */}
+      <FlexWidget style={{ width: 1, height: 36, backgroundColor: '#2A2A2A', marginHorizontal: 14 }} />
 
-        {/* Stats strip */}
-        <FlexWidget style={{ flexDirection: 'row', flexGap: 14 }}>
-          <FlexWidget style={{ flexDirection: 'column', flexGap: 1 }}>
-            <TextWidget
-              text={String(weekCount)}
-              style={{ color: '#CCCCCC', fontSize: 14, fontWeight: 'bold' }}
-            />
-            <TextWidget
-              text="workouts"
-              style={{ color: '#444444', fontSize: 9 }}
-            />
-          </FlexWidget>
-          <FlexWidget style={{ width: 1, height: 'match_parent', backgroundColor: '#2A2A2A' }} />
-          <FlexWidget style={{ flexDirection: 'column', flexGap: 1 }}>
-            <TextWidget
-              text={vol}
-              style={{ color: '#CCCCCC', fontSize: 14, fontWeight: 'bold' }}
-            />
-            <TextWidget
-              text="volume"
-              style={{ color: '#444444', fontSize: 9 }}
-            />
-          </FlexWidget>
-          <FlexWidget style={{ width: 1, height: 'match_parent', backgroundColor: '#2A2A2A' }} />
-          <FlexWidget style={{ flexDirection: 'column', flexGap: 1 }}>
-            <TextWidget
-              text={`${waterPct}%`}
-              style={{ color: '#4FC3F7', fontSize: 14, fontWeight: 'bold' }}
-            />
-            <TextWidget
-              text="hydration"
-              style={{ color: '#444444', fontSize: 9 }}
-            />
-          </FlexWidget>
-        </FlexWidget>
+      {/* Stats */}
+      <FlexWidget style={{ flexDirection: 'row', flexGap: 14 }}>
+        <StatCol value={String(weekCount)} label="workouts" period="this week" />
+        <StatCol value={vol} label="volume" period="this week" />
+        <StatCol value={`${waterPct}%`} label="hydration" period="today" accent="#4FC3F7" />
       </FlexWidget>
     </FlexWidget>
   );

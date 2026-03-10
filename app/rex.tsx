@@ -8,7 +8,7 @@ import { getBodyWeightStats } from '../db/bodyWeightQueries';
 import { getSetting } from '../db/settingsQueries';
 import { kgToDisplay, formatVolume, WeightUnit } from '../utils/weightUtils';
 import { getWaterHistory } from '../db/waterQueries';
-import RexMascot, { moodFromInsight } from '../components/RexMascot';
+import RexMascot from '../components/RexMascot';
 import { BorderRadius, Colors, Spacing, Typography } from '../constants/theme';
 import type { Insight } from '../utils/insightEngine';
 
@@ -43,10 +43,9 @@ function InsightCard({ insight }: { insight: Insight }) {
 
 export default function RexScreen() {
   const insets = useSafeAreaInsets();
-  const { insights, isLoading, lastGeneratedAt } = useInsightStore();
+  const { insights, topInsight, dailyMood, isLoading, lastGeneratedAt } = useInsightStore();
 
-  const topInsight = insights[0];
-  const mood = moodFromInsight(topInsight?.id);
+  const mood = dailyMood;
 
   // Weekly summary
   let weekCount = 0;

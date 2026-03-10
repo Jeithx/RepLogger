@@ -14,7 +14,7 @@ import { getWorkoutHistory, getAllPRs } from '../db/historyQueries';
 import { getBodyWeightEntries } from '../db/bodyWeightQueries';
 import { getWaterHistory } from '../db/waterQueries';
 import { WorkoutPhase } from '../types';
-import { RexSmallWidget } from './RexSmallWidget';
+import type {} from './RexSmallWidget'; // WidgetData type only
 import { RexWideWidget } from './RexWideWidget';
 
 // ── Data helpers ─────────────────────────────────────────────────────────────
@@ -127,21 +127,11 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     case 'WIDGET_RESIZED': {
       const { topInsight, weekStats, waterPct } = fetchWidgetData();
 
-      if (widgetInfo.widgetName === 'RexSmallWidget') {
-        renderWidget(
-          React.createElement(RexSmallWidget, {
-            insightIcon: topInsight.icon,
-            insightTitle: topInsight.title,
-            insightCategory: topInsight.category,
-            weekCount: weekStats.count,
-          })
-        );
-      } else if (widgetInfo.widgetName === 'RexWideWidget') {
+      if (widgetInfo.widgetName === 'RexWideWidget') {
         renderWidget(
           React.createElement(RexWideWidget, {
             insightIcon: topInsight.icon,
             insightTitle: topInsight.title,
-            insightMessage: topInsight.message,
             insightCategory: topInsight.category,
             weekCount: weekStats.count,
             weekVolumeKg: weekStats.volume,

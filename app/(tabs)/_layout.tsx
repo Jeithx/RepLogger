@@ -1,6 +1,8 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { View } from 'react-native';
 import { Colors } from '../../constants/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -19,9 +21,37 @@ const TAB_CONFIG: TabConfig[] = [
   { name: 'settings', title: 'Settings', icon: 'settings-outline', iconFocused: 'settings' },
 ];
 
+const TAB_ROUTES = [
+  '/',
+  '/history',
+  '/routines',
+  '/settings',
+] as const;
+
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const currentIdx = TAB_ROUTES.findIndex((r) =>
+    r === '/' ? pathname === '/' : pathname.startsWith(r)
+  );
+
+  const swipe = Gesture.Pan()
+    .runOnJS(true)
+    .activeOffsetX([-40, 40])
+    .failOffsetY([-15, 15])
+    .onEnd((e) => {
+      if (e.translationX < -40 && currentIdx < TAB_ROUTES.length - 1) {
+        router.push(TAB_ROUTES[currentIdx + 1]);
+      } else if (e.translationX > 40 && currentIdx > 0) {
+        router.push(TAB_ROUTES[currentIdx - 1]);
+      }
+    });
+
   return (
+    <GestureDetector gesture={swipe}>
+      <View style={{ flex: 1 }}>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -58,5 +88,7 @@ export default function TabLayout() {
         />
       ))}
     </Tabs>
+      </View>
+    </GestureDetector>
   );
 }

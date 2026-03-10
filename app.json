@@ -44,25 +44,14 @@
         {
           "widgets": [
             {
-              "name": "RexSmallWidget",
-              "label": "REX – Quick Insight",
-              "description": "Shows REX's top insight and weekly workout count.",
-              "previewImage": "./assets/icon.png",
-              "targetCellWidth": 2,
-              "targetCellHeight": 2,
-              "minWidth": "110dp",
-              "minHeight": "110dp",
-              "updatePeriodMillis": 1800000
-            },
-            {
               "name": "RexWideWidget",
               "label": "REX – Insight & Stats",
               "description": "Shows REX with top insight, weekly volume, and hydration.",
               "previewImage": "./assets/icon.png",
               "targetCellWidth": 4,
-              "targetCellHeight": 2,
+              "targetCellHeight": 1,
               "minWidth": "250dp",
-              "minHeight": "110dp",
+              "minHeight": "60dp",
               "updatePeriodMillis": 1800000
             }
           ]
