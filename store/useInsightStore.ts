@@ -124,12 +124,14 @@ export const useInsightStore = create<InsightStore>((set) => ({
       const phaseStartDate = getSetting('phase_start_date') || null;
       const dailyWaterGoalMl = parseInt(getSetting('daily_water_goal_ml') || '2500', 10);
       const activeRoutineId = getSetting('active_routine_id') || null;
+      const waterTrackingEnabled = getSetting('water_tracking_enabled') !== '0';
 
       const insightData: InsightData = {
         workouts,
         workoutSets,
         bodyWeightEntries,
-        waterEntries,
+        // Pass empty water data when tracking is disabled so engine skips all water rules
+        waterEntries: waterTrackingEnabled ? waterEntries : [],
         personalRecords,
         currentPhase,
         phaseGoalWeight,

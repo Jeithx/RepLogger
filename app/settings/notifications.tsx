@@ -15,7 +15,7 @@ import DateTimePicker, {
     DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { getSetting } from '../../db/settingsQueries';
+import { getSetting, setSetting } from '../../db/settingsQueries';
 import {
     checkPermissions,
     requestPermissions,
@@ -111,13 +111,13 @@ export default function NotificationSettingsScreen() {
             })();
 
             // Workout
+            const wEnabled = getSetting('workout_reminder_enabled');
             const wTime = getSetting('workout_reminder_time');
             const wDays = getSetting('workout_reminder_days');
             if (wTime) {
                 const [h, m] = wTime.split(':').map(Number);
                 setWorkoutHour(h);
                 setWorkoutMinute(m);
-                setWorkoutEnabled(true);
             }
             if (wDays) {
                 try {
@@ -127,29 +127,31 @@ export default function NotificationSettingsScreen() {
                     // ignore
                 }
             }
+            // Enabled state: explicit '1' = on, explicit '0' = off, '' = fall back to time presence
+            setWorkoutEnabled(wEnabled === '1' || (wEnabled !== '0' && !!wTime));
 
             // Water
+            const waterEnabled = getSetting('water_reminder_enabled');
             const wInterval = getSetting('water_reminder_interval');
             const wStart = getSetting('water_reminder_start');
             const wEnd = getSetting('water_reminder_end');
             if (wInterval) {
                 const iv = parseInt(wInterval, 10) as IntervalOption;
-                if (INTERVAL_OPTIONS.includes(iv)) {
-                    setWaterInterval(iv);
-                    setWaterEnabled(true);
-                }
+                if (INTERVAL_OPTIONS.includes(iv)) setWaterInterval(iv);
             }
             if (wStart) setWaterStart(parseInt(wStart, 10));
             if (wEnd) setWaterEnd(parseInt(wEnd, 10));
+            setWaterEnabled(waterEnabled === '1' || (waterEnabled !== '0' && !!wInterval));
 
             // Weight
+            const weightEnabled = getSetting('weight_reminder_enabled');
             const weightTime = getSetting('weight_reminder_time');
             if (weightTime) {
                 const [h, m] = weightTime.split(':').map(Number);
                 setWeightHour(h);
                 setWeightMinute(m);
-                setWeightEnabled(true);
             }
+            setWeightEnabled(weightEnabled === '1' || (weightEnabled !== '0' && !!weightTime));
         }, [])
     );
 
@@ -158,11 +160,13 @@ export default function NotificationSettingsScreen() {
     // Workout
     const handleWorkoutToggle = async (val: boolean) => {
         setWorkoutEnabled(val);
+        setSetting('workout_reminder_enabled', val ? '1' : '0');
         if (val) {
             const granted = await requestPermissions();
             if (!granted) {
                 setPermGranted(false);
                 setWorkoutEnabled(false);
+                setSetting('workout_reminder_enabled', '0');
                 return;
             }
             setPermGranted(true);
@@ -202,11 +206,13 @@ export default function NotificationSettingsScreen() {
     // Water
     const handleWaterToggle = async (val: boolean) => {
         setWaterEnabled(val);
+        setSetting('water_reminder_enabled', val ? '1' : '0');
         if (val) {
             const granted = await requestPermissions();
             if (!granted) {
                 setPermGranted(false);
                 setWaterEnabled(false);
+                setSetting('water_reminder_enabled', '0');
                 return;
             }
             setPermGranted(true);
@@ -248,11 +254,13 @@ export default function NotificationSettingsScreen() {
     // Weight
     const handleWeightToggle = async (val: boolean) => {
         setWeightEnabled(val);
+        setSetting('weight_reminder_enabled', val ? '1' : '0');
         if (val) {
             const granted = await requestPermissions();
             if (!granted) {
                 setPermGranted(false);
                 setWeightEnabled(false);
+                setSetting('weight_reminder_enabled', '0');
                 return;
             }
             setPermGranted(true);

@@ -48,9 +48,18 @@ function formatDate(isoString: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+function parseDateMs(s: string): number {
+  // started_at is stored as SQLite UTC 'YYYY-MM-DD HH:MM:SS' (no timezone suffix).
+  // finished_at is stored as JS ISO 'YYYY-MM-DDTHH:MM:SS.mssZ' (UTC with Z).
+  // Parsing the space-format without 'Z' treats it as local time in Hermes,
+  // adding the timezone offset to the computed duration. Fix: always parse as UTC.
+  return new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z').getTime();
+}
+
 function formatDuration(startedAt: string, finishedAt: string | null): string {
   if (!finishedAt) return '—';
-  const diff = Math.floor((new Date(finishedAt).getTime() - new Date(startedAt).getTime()) / 1000);
+  const diff = Math.floor((parseDateMs(finishedAt) - parseDateMs(startedAt)) / 1000);
+  if (diff <= 0) return '—';
   const h = Math.floor(diff / 3600);
   const m = Math.floor((diff % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
@@ -320,6 +329,7 @@ export default function HomeScreen() {
   const [lastWorkout, setLastWorkout] = useState<Workout | null>(null);
   const [unit, setUnit] = useState<WeightUnit>('kg');
   const [weekStats, setWeekStats] = useState<{ count: number; volume: number }>({ count: 0, volume: 0 });
+  const [waterEnabled, setWaterEnabled] = useState(true);
 
   const refresh = useCallback(() => {
     const recents = getRecentWorkouts(1);
@@ -327,6 +337,7 @@ export default function HomeScreen() {
     setWeekStats(getWeekStats());
     const savedUnit = getSetting('weight_unit');
     setUnit(savedUnit === 'lbs' ? 'lbs' : 'kg');
+    setWaterEnabled(getSetting('water_tracking_enabled') !== '0');
     loadBwEntries();
     loadBwStats();
     loadPhaseInfo();
@@ -438,7 +449,7 @@ export default function HomeScreen() {
       </Pressable>
 
       {/* Water Card */}
-      <Pressable
+      {waterEnabled && <Pressable
         style={({ pressed }) => [styles.waterCard, pressed && styles.cardPressed]}
         onPress={() => router.push('/water')}
       >
@@ -471,7 +482,7 @@ export default function HomeScreen() {
             </Pressable>
           ))}
         </View>
-      </Pressable>
+      </Pressable>}
 
       {lastWorkout && (
         <View style={styles.section}>

@@ -59,21 +59,16 @@ export default function TabLayout() {
           backgroundColor: Colors.surface,
           borderTopColor: Colors.border,
           borderTopWidth: 1,
-          height: 60 + insets.bottom,
-          paddingBottom: 8 + insets.bottom,
-          paddingTop: 8,
+          height: 56 + insets.bottom,
+          paddingBottom: insets.bottom,
+          paddingTop: 0,
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textSecondary,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-        },
+        tabBarShowLabel: false,
         tabBarItemStyle: {
           justifyContent: 'center',
           alignItems: 'center',
-          paddingBottom: 0,
-          paddingTop: 0,
         },
       }}
     >

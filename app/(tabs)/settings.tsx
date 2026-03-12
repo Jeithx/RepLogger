@@ -4,6 +4,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -100,6 +101,7 @@ export default function SettingsScreen() {
   const [restTimer, setRestTimer] = useState<RestOption>('90');
   const [exporting, setExporting] = useState(false);
   const [waterGoalInput, setWaterGoalInput] = useState('');
+  const [waterTrackingEnabled, setWaterTrackingEnabled] = useState(true);
   const { dailyGoalMl, waterUnit, setDailyGoal, setWaterUnit, loadSettings: loadWaterSettings } = useWaterStore();
   const { status, isSupporter, tier, loadStatus, restorePurchases } = useSupporterStore();
 
@@ -109,11 +111,17 @@ export default function SettingsScreen() {
       setUnit(u === 'lbs' ? 'lbs' : 'kg');
       const r = getSetting('rest_timer_seconds');
       setRestTimer(REST_OPTIONS.includes(r as RestOption) ? (r as RestOption) : '90');
+      setWaterTrackingEnabled(getSetting('water_tracking_enabled') !== '0');
       loadWaterSettings();
       setWaterGoalInput(String(dailyGoalMl));
       loadStatus();
     }, [loadWaterSettings, dailyGoalMl, loadStatus])
   );
+
+  const handleWaterTrackingToggle = (val: boolean) => {
+    setWaterTrackingEnabled(val);
+    setSetting('water_tracking_enabled', val ? '1' : '0');
+  };
 
   const handleWaterGoalBlur = () => {
     const parsed = parseInt(waterGoalInput, 10);
@@ -314,29 +322,43 @@ export default function SettingsScreen() {
       <SectionHeader title="WATER" />
       <View style={styles.card}>
         <View style={styles.settingsRow}>
-          <Text style={styles.rowLabel}>Daily Goal</Text>
-          <View style={styles.waterGoalRow}>
-            <TextInput
-              style={styles.waterGoalInput}
-              value={waterGoalInput}
-              onChangeText={setWaterGoalInput}
-              onBlur={handleWaterGoalBlur}
-              keyboardType="number-pad"
-              selectTextOnFocus
-            />
-            <Text style={styles.waterGoalUnit}>ml</Text>
-          </View>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.settingsRow}>
-          <Text style={styles.rowLabel}>Unit</Text>
-          <PillGroup<WaterUnit>
-            options={['ml', 'oz']}
-            value={waterUnit}
-            labels={{ ml: 'ML', oz: 'OZ' }}
-            onChange={(v) => setWaterUnit(v)}
+          <Text style={styles.rowLabel}>Track Water Intake</Text>
+          <Switch
+            value={waterTrackingEnabled}
+            onValueChange={handleWaterTrackingToggle}
+            trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
+            thumbColor={Colors.text}
           />
         </View>
+        {waterTrackingEnabled && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.settingsRow}>
+              <Text style={styles.rowLabel}>Daily Goal</Text>
+              <View style={styles.waterGoalRow}>
+                <TextInput
+                  style={styles.waterGoalInput}
+                  value={waterGoalInput}
+                  onChangeText={setWaterGoalInput}
+                  onBlur={handleWaterGoalBlur}
+                  keyboardType="number-pad"
+                  selectTextOnFocus
+                />
+                <Text style={styles.waterGoalUnit}>ml</Text>
+              </View>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.settingsRow}>
+              <Text style={styles.rowLabel}>Unit</Text>
+              <PillGroup<WaterUnit>
+                options={['ml', 'oz']}
+                value={waterUnit}
+                labels={{ ml: 'ML', oz: 'OZ' }}
+                onChange={(v) => setWaterUnit(v)}
+              />
+            </View>
+          </>
+        )}
       </View>
 
       {/* ── About ───────────────────────────────── */}
